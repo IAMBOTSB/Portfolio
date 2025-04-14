@@ -1,0 +1,115 @@
+body {
+  margin: 0;
+  background: #f4eac4;
+  font-family: Arial, sans-serif;
+  overflow-x: hidden;
+}
+
+.main-wrapper {
+  display: flex;
+  justify-content: center;
+  padding-top: 30px;
+}
+
+.container {
+  position: relative;
+  width: 600px;
+  height: auto;
+}
+
+.card {
+  position: relative;
+  width: 100%;
+}
+
+.card img {
+  width: 100%;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.hotspot {
+  position: absolute;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0);
+}
+
+.hotspot:hover {
+  border: 5px solid rgb(0, 0, 0);
+  background: #41707f73;
+}
+
+/* Popup styles */
+.branch-popup {
+  display: none;
+  position: absolute;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.branch-content {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  padding: 20px;
+  width: 320px;
+  position: relative;
+}
+
+.branch-content h2 {
+  margin-top: 0;
+  font-size: 18px;
+  color: #222;
+}
+
+.branch-content p,
+.branch-content ul {
+  font-size: 14px;
+  margin-top: 10px;
+  color: #444;
+}
+
+.branch-content ul {
+  padding-left: 20px;
+  margin: 10px 0;
+}
+
+.branch-content ul li {
+  margin-bottom: 6px;
+}
+
+.arrow {
+  width: 0;
+  height: 0;
+  position: absolute;
+  left: -10px;
+  top: 20px;
+  border-style: solid;
+  border-width: 10px 10px 10px 0;
+  border-color: transparent #ffffff transparent transparent;
+}
+
+.close-btn {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  font-size: 18px;
+  font-weight: bold;
+  color: #999;
+  cursor: pointer;
+}
+
+.close-btn:hover {
+  color: #000;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Portfolio Card</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="main-wrapper">
+    <div class="container">
+      <div class="card" id="playerCard">
+        <img src="photo_2025-04-12_15-53-10.jpg" alt="Player Card" />
+        
+        <!-- Section Hotspots -->
+        <div class="hotspot" data-section="from" style="top: 157px;left: 304px;width: 245px;height: 177px;border-radius: 15px;"></div>
+        <div class="hotspot" data-section="skills" style="top: 354px;left: 304px;width: 245px;height: 259px;border-radius: 17px;"></div>
+        <div class="hotspot" data-section="achievements" style="top: 634px;left: 43px;width: 506px;height: 91px;border-radius: 17px;"></div>
+        <div class="hotspot" data-section="certifications" style="top: 746px;left: 43px;width: 506px;height: 91px;border-radius: 17px;"></div>
+      </div>
+    </div>
+
+    <!-- Popup -->
+    <div class="branch-popup" id="branchPopup">
+      <div class="arrow"></div>
+      <div class="branch-content">
+        <span class="close-btn" onclick="closePopup()">&times;</span>
+        <h2 id="popupTitle">Title</h2>
+        <p id="popupText">Content...</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
