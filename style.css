@@ -17,6 +17,82 @@ body {
   height: auto;
 }
 
+/* Flip animation */
+.card-flip-container {
+  perspective: 1000px;
+  width: 100%;
+}
+
+.card-flip {
+  width: 100%;
+  transition: transform 1s ease-in-out;
+  transform-style: preserve-3d;
+  position: relative;
+}
+
+.card-front,
+.card-back {
+  position: absolute;
+  width: 100%;
+  backface-visibility: hidden;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* FRONT shown initially (card back design) */
+.card-front {
+  background: #e3c29f;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  top: 0px;
+  left: 1px;
+  width: 600px;
+  height: 901px;
+  border-radius: 15px;
+}
+
+/* Fake card back design */
+.card-back-design {
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    45deg,
+    #caa474,
+    #caa474 10px,
+    #e3c29f 10px,
+    #e3c29f 20px
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  position: relative;
+}
+
+.reveal-text {
+  font-size: 28px;
+  font-weight: bold;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px 24px;
+  border-radius: 8px;
+  animation: fadeIn 1.5s ease-in-out infinite alternate;
+}
+
+/* BACK = the real front of the card with image */
+.card-back {
+  transform: rotateY(180deg);
+  z-index: 1;
+}
+
+.card-flip.flipped {
+  transform: rotateY(180deg);
+}
+
+/* Actual card and hotspots */
 .card {
   position: relative;
   width: 100%;
@@ -25,7 +101,6 @@ body {
 .card img {
   width: 100%;
   border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
 }
 
 .hotspot {
@@ -39,7 +114,7 @@ body {
   background: #41707f73;
 }
 
-/* Popup styles */
+/* Popup */
 .branch-popup {
   display: none;
   position: absolute;
@@ -48,12 +123,13 @@ body {
 }
 
 .branch-content {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  padding: 20px;
-  width: 320px;
-  position: relative;
+  background: #f0dfc1;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    padding: 20px;
+    width: 320px;
+    position: relative;
+    border: 5px solid #262426;
 }
 
 .branch-content h2 {
@@ -86,7 +162,7 @@ body {
   top: 20px;
   border-style: solid;
   border-width: 10px 10px 10px 0;
-  border-color: transparent #ffffff transparent transparent;
+  border-color: transparent #262426 transparent transparent;
 }
 
 .close-btn {
@@ -105,11 +181,11 @@ body {
 
 @keyframes fadeIn {
   from {
-    opacity: 0;
-    transform: translateX(10px);
+    opacity: 0.6;
+    transform: scale(1);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: scale(1.05);
   }
 }
