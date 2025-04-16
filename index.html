@@ -9,14 +9,27 @@
 <body>
   <div class="main-wrapper">
     <div class="container">
-      <div class="card" id="playerCard">
-        <img src="photo_2025-04-12_15-53-10.jpg" alt="Player Card" />
-        
-        <!-- Section Hotspots -->
-        <div class="hotspot" data-section="from" style="top: 157px;left: 304px;width: 245px;height: 177px;border-radius: 15px;"></div>
-        <div class="hotspot" data-section="skills" style="top: 354px;left: 304px;width: 245px;height: 259px;border-radius: 17px;"></div>
-        <div class="hotspot" data-section="achievements" style="top: 634px;left: 43px;width: 506px;height: 91px;border-radius: 17px;"></div>
-        <div class="hotspot" data-section="certifications" style="top: 746px;left: 43px;width: 506px;height: 91px;border-radius: 17px;"></div>
+      <div class="card-flip-container" id="flipContainer">
+        <div class="card-flip" id="flipCard">
+          <!-- BACK of the card (visible first) -->
+          <div class="card-front">
+            <div class="card-back-design">
+              <p class="reveal-text">Loading Bio..</p>
+            </div>
+          </div>
+
+          <!-- FRONT of the card (image + hotspots) -->
+          <div class="card-back">
+            <div class="card" id="playerCard">
+              <img src="photo_2025-04-12_15-53-10.jpg" alt="Player Card" />
+              <!-- Section Hotspots -->
+              <div class="hotspot" data-section="from" style="top: 157px;left: 304px;width: 245px;height: 177px;border-radius: 15px;"></div>
+              <div class="hotspot" data-section="skills" style="top: 354px;left: 304px;width: 245px;height: 259px;border-radius: 17px;"></div>
+              <div class="hotspot" data-section="achievements" style="top: 634px;left: 43px;width: 506px;height: 91px;border-radius: 17px;"></div>
+              <div class="hotspot" data-section="certifications" style="top: 746px;left: 43px;width: 506px;height: 91px;border-radius: 17px;"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
