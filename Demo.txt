@@ -6,15 +6,21 @@ public with sharing class RelatedObjectsController {
         Id currentUserId = UserInfo.getUserId();
 
         for (Home_Page_Objects_Configuratiom__mdt objmtd : getHomePageObjectMetadata()) {
-            if (!isValidObjectConfig(objmtd.Object__c, objmtd.Fields__c)) continue;
+            if (!isValidObjectConfig(objmtd.Object__c, objmtd.Fields__c)) {
+                continue;
+            }
 
             List<String> fieldList = parseFields(objmtd.Fields__c);
-            if (fieldList.size() <= 2) continue;
+            if (fieldList.size() <= 2) {
+                continue;
+            }
 
             String soql = buildSOQL(objmtd.Object__c, fieldList, objmtd.Subscriber__c, currentUserId);
-
             List<SObject> records = safeQuery(soql);
-            if (records == null) continue;
+
+            if (records == null) {
+                continue;
+            }
 
             relatedData.put(objmtd.MasterLabel, wrapRecordData(fieldList, flattenRecords(records, fieldList)));
         }
@@ -24,23 +30,29 @@ public with sharing class RelatedObjectsController {
 
     @AuraEnabled(cacheable=true)
     public static Map<String, Object> getAllRelatedRecords(Id recordId) {
-        if (recordId == null) throw new AuraHandledException('Record Id is required.');
+        if (recordId == null) {
+            throw new AuraHandledException('Record Id is required.');
+        }
 
         Map<String, Object> relatedData = new Map<String, Object>();
         String objectName = recordId.getSObjectType().getDescribe().getName();
 
         for (RelatedObject__mdt objmtd : getRelatedObjectMetadata(objectName)) {
-            if (!isValidObjectConfig(objmtd.RelatedObject__c, objmtd.Fields__c, objmtd.Lookup__c)) continue;
+            if (!isValidObjectConfig(objmtd.RelatedObject__c, objmtd.Fields__c, objmtd.Lookup__c)) {
+                continue;
+            }
 
             List<String> fieldList = parseFields(objmtd.Fields__c);
             ensureIdField(fieldList);
 
-            String soql = 'SELECT ' + String.join(fieldList, ', ') + 
-                          ' FROM ' + String.escapeSingleQuotes(objmtd.RelatedObject__c) + 
+            String soql = 'SELECT ' + String.join(fieldList, ', ') +
+                          ' FROM ' + String.escapeSingleQuotes(objmtd.RelatedObject__c) +
                           ' WHERE ' + String.escapeSingleQuotes(objmtd.Lookup__c) + ' = :recordId LIMIT 10';
 
             List<SObject> records = safeQuery(soql);
-            if (records == null) continue;
+            if (records == null) {
+                continue;
+            }
 
             relatedData.put(objmtd.RelatedObject__c, wrapRecordData(fieldList, flattenRecords(records, fieldList)));
         }
@@ -50,26 +62,34 @@ public with sharing class RelatedObjectsController {
 
     @AuraEnabled(cacheable=true)
     public static Map<String, Object> getParentRecords(Id childRecordId) {
-        if (childRecordId == null) throw new AuraHandledException('Child Record Id is required.');
+        if (childRecordId == null) {
+            throw new AuraHandledException('Child Record Id is required.');
+        }
 
         Map<String, Object> parentData = new Map<String, Object>();
         String childObjectName = childRecordId.getSObjectType().getDescribe().getName();
 
         for (RelatedParentObject__mdt objmtd : getParentObjectMetadata(childObjectName)) {
-            if (!isValidObjectConfig(objmtd.RelatedObject__c, objmtd.Fields__c, objmtd.Lookup__c)) continue;
+            if (!isValidObjectConfig(objmtd.RelatedObject__c, objmtd.Fields__c, objmtd.Lookup__c)) {
+                continue;
+            }
 
             List<String> fieldList = parseFields(objmtd.Fields__c);
             ensureIdField(fieldList);
 
             Id parentRecordId = getParentRecordId(childObjectName, objmtd.Lookup__c, childRecordId);
-            if (parentRecordId == null) continue;
+            if (parentRecordId == null) {
+                continue;
+            }
 
-            String soql = 'SELECT ' + String.join(fieldList, ', ') + 
-                          ' FROM ' + String.escapeSingleQuotes(objmtd.RelatedObject__c) + 
+            String soql = 'SELECT ' + String.join(fieldList, ', ') +
+                          ' FROM ' + String.escapeSingleQuotes(objmtd.RelatedObject__c) +
                           ' WHERE Id = :parentRecordId';
 
             List<SObject> parentRecords = safeQuery(soql);
-            if (parentRecords == null) continue;
+            if (parentRecords == null) {
+                continue;
+            }
 
             parentData.put(objmtd.RelatedObject__c, wrapRecordData(fieldList, flattenRecords(parentRecords, fieldList)));
         }
@@ -103,7 +123,9 @@ public with sharing class RelatedObjectsController {
     }
 
     private static void ensureIdField(List<String> fieldList) {
-        if (!fieldList.contains('Id')) fieldList.add(0, 'Id');
+        if (!fieldList.contains('Id')) {
+            fieldList.add(0, 'Id');
+        }
     }
 
     private static Map<String, Object> wrapRecordData(List<String> fieldList, List<Map<String, Object>> records) {
@@ -147,7 +169,12 @@ public with sharing class RelatedObjectsController {
                           ' FROM ' + String.escapeSingleQuotes(childObjectName) +
                           ' WHERE Id = :childRecordId';
             List<SObject> childRecords = Database.query(soql);
-            return !childRecords.isEmpty() ? (Id)childRecords[0].get(lookupField) : null;
+
+            if (!childRecords.isEmpty()) {
+                return (Id) childRecords[0].get(lookupField);
+            } else {
+                return null;
+            }
         } catch (Exception e) {
             System.debug('Parent Lookup Error: ' + e.getMessage());
             return null;
@@ -159,9 +186,11 @@ public with sharing class RelatedObjectsController {
 
         for (SObject record : records) {
             Map<String, Object> flat = new Map<String, Object>();
+
             for (String field : fieldList) {
                 flat.put(field, getFieldValue(record, field));
             }
+
             flatRecords.add(flat);
         }
 
@@ -172,10 +201,18 @@ public with sharing class RelatedObjectsController {
         if (field.contains('.')) {
             List<String> parts = field.split('\\.');
             SObject rel = record;
+
             for (Integer i = 0; i < parts.size() - 1; i++) {
-                rel = rel != null ? rel.getSObject(parts[i]) : null;
+                if (rel != null) {
+                    rel = rel.getSObject(parts[i]);
+                }
             }
-            return rel != null ? rel.get(parts[parts.size() - 1]) : null;
+
+            if (rel != null) {
+                return rel.get(parts[parts.size() - 1]);
+            } else {
+                return null;
+            }
         } else {
             return record.get(field);
         }
