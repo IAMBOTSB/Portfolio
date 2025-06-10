@@ -1,310 +1,183 @@
-/**
- * @description Controller to fetch related records based on custom metadata configurations.
- * Refactored to improve performance, security, and readability.
- */
 public with sharing class RelatedObjectsController {
 
-    private static final Integer DEFAULT_RECORD_LIMIT = 10;
-
-    /**
-     * @description Fetches various objects and their records based on Home_Page_Objects_Configuratiom__mdt.
-     * @return Map<String, Object> A map where the key is the object's developer name and the value contains its fields and records.
-     */
     @AuraEnabled(cacheable=true)
     public static Map<String, Object> getRelatedObjectsAndRecords() {
         Map<String, Object> relatedData = new Map<String, Object>();
         Id currentUserId = UserInfo.getUserId();
 
-        List<Home_Page_Objects_Configuratiom__mdt> metadataConfigs = [
-            SELECT Fields__c, MasterLabel, Object__c, Subscriber__c 
-            FROM Home_Page_Objects_Configuratiom__mdt 
-            LIMIT :DEFAULT_RECORD_LIMIT
-        ];
+        for (Home_Page_Objects_Configuratiom__mdt objmtd : getHomePageObjectMetadata()) {
+            if (!isValidObjectConfig(objmtd.Object__c, objmtd.Fields__c)) continue;
 
-        for (Home_Page_Objects_Configuratiom__mdt config : metadataConfigs) {
-            String objectApiName = config.Object__c;
-            String fieldsString = config.Fields__c;
+            List<String> fieldList = parseFields(objmtd.Fields__c);
+            if (fieldList.size() <= 2) continue;
 
-            if (String.isBlank(objectApiName) || String.isBlank(fieldsString)) {
-                continue;
-            }
+            String soql = buildSOQL(objmtd.Object__c, fieldList, objmtd.Subscriber__c, currentUserId);
 
-            try {
-                List<String> fields = parseFields(fieldsString);
-                if (fields.isEmpty()) {
-                    continue;
-                }
-                
-                // Security: Check FLS and CRUD permissions before querying
-                checkReadAccess(objectApiName, fields);
+            List<SObject> records = safeQuery(soql);
+            if (records == null) continue;
 
-                // Dynamically build a safe SOQL query
-                String soql = buildSoqlForUser(objectApiName, fields, config.Subscriber__c, currentUserId);
-                
-                List<SObject> records = Database.query(soql);
-                
-                Map<String, Object> objectData = new Map<String, Object>();
-                objectData.put('fields', fields);
-                objectData.put('records', flattenRecords(records, fields));
-                relatedData.put(config.MasterLabel, objectData);
-
-            } catch (Exception e) {
-                System.debug(LoggingLevel.ERROR, 'Error querying object: ' + objectApiName + '. Details: ' + e.getMessage());
-                // In a real app, you might want to throw an AuraHandledException here
-            }
+            relatedData.put(objmtd.MasterLabel, wrapRecordData(fieldList, flattenRecords(records, fieldList)));
         }
+
         return relatedData;
     }
 
-    /**
-     * @description Fetches records related to a specific recordId, based on RelatedObject__mdt.
-     * @param recordId The Id of the master record.
-     * @return Map<String, Object> A map of related object data.
-     */
     @AuraEnabled(cacheable=true)
     public static Map<String, Object> getAllRelatedRecords(Id recordId) {
-        if (recordId == null) {
-            throw new AuraHandledException('Record Id is required.');
-        }
+        if (recordId == null) throw new AuraHandledException('Record Id is required.');
 
         Map<String, Object> relatedData = new Map<String, Object>();
         String objectName = recordId.getSObjectType().getDescribe().getName();
 
-        List<RelatedObject__mdt> metadataConfigs = [
-            SELECT RelatedObject__c, Fields__c, Lookup__c, MasterLabel
-            FROM RelatedObject__mdt
-            WHERE MasterLabel = :objectName
-        ];
+        for (RelatedObject__mdt objmtd : getRelatedObjectMetadata(objectName)) {
+            if (!isValidObjectConfig(objmtd.RelatedObject__c, objmtd.Fields__c, objmtd.Lookup__c)) continue;
 
-        for (RelatedObject__mdt config : metadataConfigs) {
-            String relatedObject = config.RelatedObject__c;
-            String fieldsString = config.Fields__c;
-            String lookupField = config.Lookup__c;
+            List<String> fieldList = parseFields(objmtd.Fields__c);
+            ensureIdField(fieldList);
 
-            if (String.isBlank(relatedObject) || String.isBlank(fieldsString) || String.isBlank(lookupField)) {
-                continue;
-            }
+            String soql = 'SELECT ' + String.join(fieldList, ', ') + 
+                          ' FROM ' + String.escapeSingleQuotes(objmtd.RelatedObject__c) + 
+                          ' WHERE ' + String.escapeSingleQuotes(objmtd.Lookup__c) + ' = :recordId LIMIT 10';
 
-            try {
-                List<String> fields = parseFields(fieldsString);
-                if (fields.isEmpty()) continue;
-                if (!fields.contains('Id')) fields.add(0, 'Id');
+            List<SObject> records = safeQuery(soql);
+            if (records == null) continue;
 
-                checkReadAccess(relatedObject, new List<String>{lookupField});
-                checkReadAccess(relatedObject, fields);
-
-                String soql = 'SELECT ' + String.join(fields, ', ') +
-                              ' FROM ' + relatedObject +
-                              ' WHERE ' + lookupField + ' = :recordId LIMIT ' + DEFAULT_RECORD_LIMIT;
-                
-                List<SObject> records = Database.query(soql);
-
-                Map<String, Object> objectData = new Map<String, Object>();
-                objectData.put('fields', fields);
-                objectData.put('records', flattenRecords(records, fields));
-                relatedData.put(relatedObject, objectData);
-
-            } catch (Exception e) {
-                System.debug(LoggingLevel.ERROR, 'Error querying related object: ' + relatedObject + '. Details: ' + e.getMessage());
-            }
+            relatedData.put(objmtd.RelatedObject__c, wrapRecordData(fieldList, flattenRecords(records, fieldList)));
         }
+
         return relatedData;
     }
-    
-    /**
-     * @description Fetches parent records of a given child record, based on RelatedParentObject__mdt.
-     * Refactored to be bulk-safe and avoid SOQL in loops.
-     * @param childRecordId The Id of the child record.
-     * @return Map<String, Object> A map of parent object data.
-     */
+
     @AuraEnabled(cacheable=true)
     public static Map<String, Object> getParentRecords(Id childRecordId) {
-        if (childRecordId == null) {
-            throw new AuraHandledException('Child Record Id is required.');
-        }
+        if (childRecordId == null) throw new AuraHandledException('Child Record Id is required.');
 
-        String childObjectName = childRecordId.getSObjectType().getDescribe().getName();
-        List<RelatedParentObject__mdt> metadataConfigs = [
-            SELECT RelatedObject__c, Fields__c, Lookup__c
-            FROM RelatedParentObject__mdt
-            WHERE MasterLabel = :childObjectName
-        ];
-
-        if (metadataConfigs.isEmpty()) {
-            return new Map<String, Object>();
-        }
-
-        // Step 1: Aggregate lookup fields and parent details from metadata
-        Set<String> childLookupFields = new Set<String>();
-        Map<String, Set<String>> parentObjectToFields = new Map<String, Set<String>>();
-        Map<String, String> parentObjectToLookupField = new Map<String, String>();
-
-        for (RelatedParentObject__mdt config : metadataConfigs) {
-            if (String.isNotBlank(config.RelatedObject__c) && String.isNotBlank(config.Lookup__c) && String.isNotBlank(config.Fields__c)) {
-                childLookupFields.add(config.Lookup__c);
-                parentObjectToLookupField.put(config.RelatedObject__c, config.Lookup__c);
-
-                if (!parentObjectToFields.containsKey(config.RelatedObject__c)) {
-                    parentObjectToFields.put(config.RelatedObject__c, new Set<String>());
-                }
-                parentObjectToFields.get(config.RelatedObject__c).addAll(parseFields(config.Fields__c));
-            }
-        }
-
-        if (childLookupFields.isEmpty()) {
-            return new Map<String, Object>();
-        }
-        
-        // Step 2: Query the child record once to get all parent IDs
-        checkReadAccess(childObjectName, new List<String>(childLookupFields));
-        String childQuery = 'SELECT ' + String.join(new List<String>(childLookupFields), ',') + ' FROM ' + childObjectName + ' WHERE Id = :childRecordId';
-        SObject childRecord = Database.query(childQuery);
-        
-        // Step 3: Aggregate parent IDs by SObject type
-        Map<String, Set<Id>> parentTypeToIds = new Map<String, Set<Id>>();
-        for (String parentType : parentObjectToLookupField.keySet()) {
-            String lookupField = parentObjectToLookupField.get(parentType);
-            Id parentId = (Id) childRecord.get(lookupField);
-            if (parentId != null) {
-                if (!parentTypeToIds.containsKey(parentType)) {
-                    parentTypeToIds.put(parentType, new Set<Id>());
-                }
-                parentTypeToIds.get(parentType).add(parentId);
-            }
-        }
-        
-        // Step 4: Query all parent records in a bulk-safe way (one query per SObject type)
-        Map<Id, SObject> allParentRecordsById = new Map<Id, SObject>();
-        for (String parentType : parentTypeToIds.keySet()) {
-            List<String> fieldsToQuery = new List<String>(parentObjectToFields.get(parentType));
-            if (!fieldsToQuery.contains('Id')) fieldsToQuery.add(0, 'Id');
-            
-            checkReadAccess(parentType, fieldsToQuery);
-            String parentQuery = 'SELECT ' + String.join(fieldsToQuery, ',') + ' FROM ' + parentType + ' WHERE Id IN :parentTypeToIds.get(parentType)';
-            allParentRecordsById.putAll(new Map<Id, SObject>(Database.query(parentQuery)));
-        }
-
-        // Step 5: Assemble the final result map
         Map<String, Object> parentData = new Map<String, Object>();
-        for (String parentType : parentObjectToLookupField.keySet()) {
-            String lookupField = parentObjectToLookupField.get(parentType);
-            Id parentId = (Id) childRecord.get(lookupField);
-            
-            if (parentId != null && allParentRecordsById.containsKey(parentId)) {
-                List<String> fields = new List<String>(parentObjectToFields.get(parentType));
-                Map<String, Object> objectData = new Map<String, Object>();
-                objectData.put('fields', fields);
-                objectData.put('records', flattenRecords(new List<SObject>{allParentRecordsById.get(parentId)}, fields));
-                parentData.put(parentType, objectData);
-            }
+        String childObjectName = childRecordId.getSObjectType().getDescribe().getName();
+
+        for (RelatedParentObject__mdt objmtd : getParentObjectMetadata(childObjectName)) {
+            if (!isValidObjectConfig(objmtd.RelatedObject__c, objmtd.Fields__c, objmtd.Lookup__c)) continue;
+
+            List<String> fieldList = parseFields(objmtd.Fields__c);
+            ensureIdField(fieldList);
+
+            Id parentRecordId = getParentRecordId(childObjectName, objmtd.Lookup__c, childRecordId);
+            if (parentRecordId == null) continue;
+
+            String soql = 'SELECT ' + String.join(fieldList, ', ') + 
+                          ' FROM ' + String.escapeSingleQuotes(objmtd.RelatedObject__c) + 
+                          ' WHERE Id = :parentRecordId';
+
+            List<SObject> parentRecords = safeQuery(soql);
+            if (parentRecords == null) continue;
+
+            parentData.put(objmtd.RelatedObject__c, wrapRecordData(fieldList, flattenRecords(parentRecords, fieldList)));
         }
-        
+
         return parentData;
     }
 
+    // ===== Helper Methods =====
 
-    // ================== Private Helper Methods ==================
+    private static List<Home_Page_Objects_Configuratiom__mdt> getHomePageObjectMetadata() {
+        return [SELECT Fields__c, MasterLabel, Object__c, Subscriber__c 
+                FROM Home_Page_Objects_Configuratiom__mdt LIMIT 10];
+    }
 
-    /**
-     * @description Parses a comma-separated string of field names into a list.
-     * @param fieldsStr The string of fields.
-     * @return List<String> A list of unique, trimmed field names.
-     */
+    private static List<RelatedObject__mdt> getRelatedObjectMetadata(String objectName) {
+        return [SELECT RelatedObject__c, Fields__c, Lookup__c, MasterLabel
+                FROM RelatedObject__mdt WHERE MasterLabel = :objectName];
+    }
+
+    private static List<RelatedParentObject__mdt> getParentObjectMetadata(String childObjectName) {
+        return [SELECT MasterLabel, Fields__c, RelatedObject__c, Lookup__c
+                FROM RelatedParentObject__mdt WHERE MasterLabel = :childObjectName];
+    }
+
+    private static Boolean isValidObjectConfig(String obj, String fields, String lookupField) {
+        return !String.isBlank(obj) && !String.isBlank(fields) && !String.isBlank(lookupField);
+    }
+
+    private static Boolean isValidObjectConfig(String obj, String fields) {
+        return !String.isBlank(obj) && !String.isBlank(fields);
+    }
+
+    private static void ensureIdField(List<String> fieldList) {
+        if (!fieldList.contains('Id')) fieldList.add(0, 'Id');
+    }
+
+    private static Map<String, Object> wrapRecordData(List<String> fieldList, List<Map<String, Object>> records) {
+        return new Map<String, Object>{
+            'fields' => fieldList,
+            'records' => records
+        };
+    }
+
     private static List<String> parseFields(String fieldsStr) {
         List<String> fieldList = new List<String>();
-        if (String.isNotBlank(fieldsStr)) {
-            for (String field : fieldsStr.split(',')) {
-                String trimmedField = field.trim();
-                if (String.isNotBlank(trimmedField) && !fieldList.contains(trimmedField)) {
-                    fieldList.add(trimmedField);
-                }
+        for (String field : fieldsStr.split(',')) {
+            String trimmed = field.trim();
+            if (!String.isBlank(trimmed) && !fieldList.contains(trimmed)) {
+                fieldList.add(trimmed);
             }
         }
         return fieldList;
     }
 
-    /**
-     * @description Builds a safe SOQL query string using bind variables.
-     * @param objectName The API name of the object to query.
-     * @param fieldList The list of fields to select.
-     * @param subscriberField The optional custom subscriber field.
-     * @param currentUserId The Id of the current user.
-     * @return String The constructed SOQL query.
-     */
-    private static String buildSoqlForUser(String objectName, List<String> fieldList, String subscriberField, Id currentUserId) {
-        String query = 'SELECT ' + String.join(fieldList, ',') + ' FROM ' + objectName;
-        
-        // Use a specific subscriber field if provided, otherwise default to OwnerId
-        if (String.isNotBlank(subscriberField)) {
-             query += ' WHERE ' + subscriberField + ' = :currentUserId';
-        } else {
-             query += ' WHERE OwnerId = :currentUserId';
-        }
-        
-        query += ' LIMIT ' + DEFAULT_RECORD_LIMIT;
-        return query;
+    private static String buildSOQL(String objectName, List<String> fieldList, String subscriberField, Id userId) {
+        String baseQuery = 'SELECT ' + String.join(fieldList, ', ') + ' FROM ' + String.escapeSingleQuotes(objectName);
+        String whereClause = String.isNotBlank(subscriberField)
+            ? subscriberField + ' = :userId'
+            : 'OwnerId = :userId';
+        return baseQuery + ' WHERE ' + whereClause + ' LIMIT 10';
     }
 
-    /**
-     * @description Flattens a list of SObjects into a list of maps, handling relationship fields.
-     * @param records The list of SObjects to flatten.
-     * @param fieldList The list of fields to include.
-     * @return List<Map<String, Object>> A list of maps representing the records.
-     */
+    private static List<SObject> safeQuery(String soql) {
+        try {
+            return Database.query(soql);
+        } catch (Exception e) {
+            System.debug('SOQL Error: ' + e.getMessage());
+            return null;
+        }
+    }
+
+    private static Id getParentRecordId(String childObjectName, String lookupField, Id childRecordId) {
+        try {
+            String soql = 'SELECT ' + String.escapeSingleQuotes(lookupField) +
+                          ' FROM ' + String.escapeSingleQuotes(childObjectName) +
+                          ' WHERE Id = :childRecordId';
+            List<SObject> childRecords = Database.query(soql);
+            return !childRecords.isEmpty() ? (Id)childRecords[0].get(lookupField) : null;
+        } catch (Exception e) {
+            System.debug('Parent Lookup Error: ' + e.getMessage());
+            return null;
+        }
+    }
+
     private static List<Map<String, Object>> flattenRecords(List<SObject> records, List<String> fieldList) {
         List<Map<String, Object>> flatRecords = new List<Map<String, Object>>();
 
         for (SObject record : records) {
-            Map<String, Object> flatRecord = new Map<String, Object>();
+            Map<String, Object> flat = new Map<String, Object>();
             for (String field : fieldList) {
-                try {
-                    if (field.contains('.')) {
-                        // Traverse relationship path (e.g., Account.Owner.Name)
-                        List<String> parts = field.split('\\.');
-                        SObject tempObj = record;
-                        for (Integer i = 0; i < parts.size() - 1; i++) {
-                            if (tempObj != null) {
-                                tempObj = tempObj.getSObject(parts[i]);
-                            }
-                        }
-                        flatRecord.put(field, tempObj != null ? tempObj.get(parts[parts.size() - 1]) : null);
-                    } else {
-                        flatRecord.put(field, record.get(field));
-                    }
-                } catch (Exception e) {
-                    System.debug(LoggingLevel.WARN, 'Could not retrieve value for field ' + field + '. Error: ' + e.getMessage());
-                    flatRecord.put(field, null);
-                }
+                flat.put(field, getFieldValue(record, field));
             }
-            flatRecords.add(flatRecord);
+            flatRecords.add(flat);
         }
+
         return flatRecords;
     }
 
-    /**
-     * @description Checks if the current user has read access to an object and its fields. Throws AuraHandledException on failure.
-     * @param objectName The API name of the object.
-     * @param fields The list of field API names.
-     */
-    private static void checkReadAccess(String objectName, List<String> fields) {
-        SObjectType sObjectType = Schema.getGlobalDescribe().get(objectName);
-
-        if (sObjectType == null || !sObjectType.getDescribe().isAccessible()) {
-            throw new AuraHandledException('Access denied to object: ' + objectName);
-        }
-
-        Map<String, Schema.SObjectField> fieldMap = sObjectType.getDescribe().fields.getMap();
-
-        for (String fieldName : fields) {
-            // For relationship fields like 'Account.Name', check the accessibility of the lookup field 'Account'.
-            String fieldToCheck = fieldName;
-            if (fieldName.contains('.')) {
-                fieldToCheck = fieldName.substring(0, fieldName.indexOf('.'));
+    private static Object getFieldValue(SObject record, String field) {
+        if (field.contains('.')) {
+            List<String> parts = field.split('\\.');
+            SObject rel = record;
+            for (Integer i = 0; i < parts.size() - 1; i++) {
+                rel = rel != null ? rel.getSObject(parts[i]) : null;
             }
-
-            if (!fieldMap.containsKey(fieldToCheck.toLowerCase()) || !fieldMap.get(fieldToCheck.toLowerCase()).getDescribe().isAccessible()) {
-                throw new AuraHandledException('Access denied to field: ' + fieldName);
-            }
+            return rel != null ? rel.get(parts[parts.size() - 1]) : null;
+        } else {
+            return record.get(field);
         }
     }
 }
