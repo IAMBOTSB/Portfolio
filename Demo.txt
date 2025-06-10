@@ -1,6 +1,7 @@
 /**
  * @description Controller to fetch related records based on custom metadata configurations.
  * This class is refactored to reduce cognitive complexity by using smaller, reusable private methods.
+ * VERSION 2: Corrected dynamic SOQL binding issue.
  */
 public with sharing class RelatedObjectsController {
 
@@ -8,26 +9,16 @@ public with sharing class RelatedObjectsController {
     // Public AuraEnabled Methods
     //================================================================================
 
-    /**
-     * @description Fetches various objects and their records for the home page based on custom metadata.
-     * @return Map<String, Object> A map where keys are object labels and values contain fields and records.
-     */
     @AuraEnabled(cacheable=true)
     public static Map<String, Object> getRelatedObjectsAndRecords() {
         Map<String, Object> relatedData = new Map<String, Object>();
         Id currentUserId = UserInfo.getUserId();
 
         for (Home_Page_Objects_Configuratiom__mdt config : fetchHomePageObjectConfigs(10)) {
-            if (isConfigInvalid(config)) {
-                continue;
-            }
+            if (isConfigInvalid(config)) continue;
 
             List<String> fieldList = parseFields(config.Fields__c);
-            // The original logic skipped if fieldList size was <= 2. Assuming 'Id' and another field were minimum.
-            // This can be adjusted if the intent was different.
-            if (fieldList.size() < 2) {
-                continue;
-            }
+            if (fieldList.size() <= 2) continue;
 
             String soql = buildHomeObjectsSoql(config.Object__c, fieldList, config.Subscriber__c, currentUserId);
             List<SObject> records = executeQuery(soql, config.Object__c);
@@ -39,11 +30,6 @@ public with sharing class RelatedObjectsController {
         return relatedData;
     }
 
-    /**
-     * @description Fetches all related child records for a given parent record Id.
-     * @param recordId The Id of the parent record.
-     * @return Map<String, Object> A map where keys are related object names and values contain their fields and records.
-     */
     @AuraEnabled(cacheable=true)
     public static Map<String, Object> getAllRelatedRecords(Id recordId) {
         if (recordId == null) {
@@ -54,14 +40,10 @@ public with sharing class RelatedObjectsController {
         String objectName = getSObjectNameFromId(recordId);
 
         for (RelatedObject__mdt config : fetchRelatedObjectConfigs(objectName)) {
-            if (isConfigInvalid(config)) {
-                continue;
-            }
+            if (isConfigInvalid(config)) continue;
 
-            List<String> fieldList = parseFields(config.Fields__c, true); // Ensure Id is included
-            if (fieldList.isEmpty()) {
-                continue;
-            }
+            List<String> fieldList = parseFields(config.Fields__c, true);
+            if (fieldList.isEmpty()) continue;
 
             String soql = buildRelatedRecordsSoql(config.RelatedObject__c, fieldList, config.Lookup__c, recordId);
             List<SObject> records = executeQuery(soql, config.RelatedObject__c);
@@ -73,11 +55,6 @@ public with sharing class RelatedObjectsController {
         return relatedData;
     }
 
-    /**
-     * @description Fetches parent records for a given child record Id.
-     * @param childRecordId The Id of the child record.
-     * @return Map<String, Object> A map where keys are parent object names and values contain their fields and records.
-     */
     @AuraEnabled(cacheable=true)
     public static Map<String, Object> getParentRecords(Id childRecordId) {
         if (childRecordId == null) {
@@ -88,19 +65,13 @@ public with sharing class RelatedObjectsController {
         String childObjectName = getSObjectNameFromId(childRecordId);
 
         for (RelatedParentObject__mdt config : fetchRelatedParentObjectConfigs(childObjectName)) {
-            if (isConfigInvalid(config)) {
-                continue;
-            }
+            if (isConfigInvalid(config)) continue;
 
             Id parentRecordId = getParentId(childObjectName, config.Lookup__c, childRecordId);
-            if (parentRecordId == null) {
-                continue;
-            }
+            if (parentRecordId == null) continue;
 
-            List<String> fieldList = parseFields(config.Fields__c, true); // Ensure Id is included
-            if (fieldList.isEmpty()) {
-                continue;
-            }
+            List<String> fieldList = parseFields(config.Fields__c, true);
+            if (fieldList.isEmpty()) continue;
 
             String soql = buildParentRecordSoql(config.RelatedObject__c, fieldList, parentRecordId);
             List<SObject> records = executeQuery(soql, config.RelatedObject__c);
@@ -112,63 +83,44 @@ public with sharing class RelatedObjectsController {
         return parentData;
     }
 
-
     //================================================================================
     // Private Helper Methods - Metadata Fetching
     //================================================================================
 
-    private static List<Home_Page_Objects_Configuratiom__mdt> fetchHomePageObjectConfigs(Integer limit) {
-        return [
-            SELECT Fields__c, MasterLabel, Object__c, Subscriber__c
-            FROM Home_Page_Objects_Configuratiom__mdt
-            LIMIT :limit
-        ];
+    private static List<Home_Page_Objects_Configuratiom__mdt> fetchHomePageObjectConfigs(Integer recordLimit) {
+        return [SELECT Fields__c, MasterLabel, Object__c, Subscriber__c FROM Home_Page_Objects_Configuratiom__mdt LIMIT :recordLimit];
     }
 
     private static List<RelatedObject__mdt> fetchRelatedObjectConfigs(String objectName) {
-        return [
-            SELECT RelatedObject__c, Fields__c, Lookup__c, MasterLabel
-            FROM RelatedObject__mdt
-            WHERE MasterLabel = :objectName
-        ];
+        return [SELECT RelatedObject__c, Fields__c, Lookup__c, MasterLabel FROM RelatedObject__mdt WHERE MasterLabel = :objectName];
     }
 
     private static List<RelatedParentObject__mdt> fetchRelatedParentObjectConfigs(String childObjectName) {
-        return [
-            SELECT MasterLabel, Fields__c, RelatedObject__c, Lookup__c
-            FROM RelatedParentObject__mdt
-            WHERE MasterLabel = :childObjectName
-        ];
+        return [SELECT MasterLabel, Fields__c, RelatedObject__c, Lookup__c FROM RelatedParentObject__mdt WHERE MasterLabel = :childObjectName];
     }
-
 
     //================================================================================
     // Private Helper Methods - SOQL Builders
     //================================================================================
 
     private static String buildHomeObjectsSoql(String objectName, List<String> fieldList, String subscriberField, Id currentUserId) {
+        // FIX: Reverted to string concatenation for dynamic SOQL bind variables. This is safe for Id types.
         String whereClause = String.isNotBlank(subscriberField)
-            ? subscriberField + ' = :currentUserId'
-            : 'OwnerId = :currentUserId';
+            ? subscriberField + ' = \'' + currentUserId + '\''
+            : 'OwnerId = \'' + currentUserId + '\'';
         
-        return 'SELECT ' + String.join(fieldList, ', ') +
-               ' FROM ' + objectName +
-               ' WHERE ' + whereClause +
-               ' LIMIT 10';
+        return 'SELECT ' + String.join(fieldList, ', ') + ' FROM ' + objectName + ' WHERE ' + whereClause + ' LIMIT 10';
     }
 
     private static String buildRelatedRecordsSoql(String relatedObject, List<String> fieldList, String lookupField, Id recordId) {
-        return 'SELECT ' + String.join(fieldList, ', ') +
-               ' FROM ' + relatedObject +
-               ' WHERE ' + lookupField + ' = :recordId LIMIT 10';
+        // FIX: Reverted to string concatenation for dynamic SOQL.
+        return 'SELECT ' + String.join(fieldList, ', ') + ' FROM ' + relatedObject + ' WHERE ' + lookupField + ' = \'' + recordId + '\' LIMIT 10';
     }
 
     private static String buildParentRecordSoql(String parentObject, List<String> fieldList, Id parentRecordId) {
-        return 'SELECT ' + String.join(fieldList, ', ') +
-               ' FROM ' + parentObject +
-               ' WHERE Id = :parentRecordId';
+        // FIX: Reverted to string concatenation for dynamic SOQL.
+        return 'SELECT ' + String.join(fieldList, ', ') + ' FROM ' + parentObject + ' WHERE Id = \'' + parentRecordId + '\'';
     }
-
 
     //================================================================================
     // Private Helper Methods - Data Processing & Utilities
@@ -179,14 +131,19 @@ public with sharing class RelatedObjectsController {
             return Database.query(soql);
         } catch (Exception e) {
             System.debug('Error querying object: ' + objectNameForError + '. Details: ' + e.getMessage());
-            return null; // Return null to allow the loop to continue safely
+            return null;
         }
     }
 
     private static Id getParentId(String childObjectName, String lookupField, Id childRecordId) {
-        String childQuery = 'SELECT ' + lookupField + ' FROM ' + childObjectName + ' WHERE Id = :childRecordId';
-        SObject childRecord = Database.query(childQuery);
-        return (Id)childRecord.get(lookupField);
+        // FIX: Query into a list to prevent an exception if no record is found.
+        String childQuery = 'SELECT ' + lookupField + ' FROM ' + childObjectName + ' WHERE Id = \'' + childRecordId + '\'';
+        List<SObject> childRecords = executeQuery(childQuery, childObjectName);
+
+        if (childRecords != null && !childRecords.isEmpty()) {
+            return (Id)childRecords[0].get(lookupField);
+        }
+        return null;
     }
     
     private static List<String> parseFields(String fieldsStr, Boolean ensureId) {
@@ -199,9 +156,7 @@ public with sharing class RelatedObjectsController {
 
     private static List<String> parseFields(String fieldsStr) {
         List<String> fieldList = new List<String>();
-        if (String.isBlank(fieldsStr)) {
-            return fieldList;
-        }
+        if (String.isBlank(fieldsStr)) return fieldList;
         for (String field : fieldsStr.split(',')) {
             String trimmedField = field.trim();
             if (String.isNotBlank(trimmedField) && !fieldList.contains(trimmedField)) {
@@ -231,11 +186,8 @@ public with sharing class RelatedObjectsController {
     }
     
     private static Object getRelationshipFieldValue(SObject record, String fieldName) {
-        if (!fieldName.contains('.')) {
-            return record.get(fieldName);
-        }
+        if (!fieldName.contains('.')) return record.get(fieldName);
 
-        // Handle relationship fields (e.g., 'Account.Name')
         List<String> parts = fieldName.split('\\.');
         SObject tempObj = record;
         for (Integer i = 0; i < parts.size() - 1; i++) {
@@ -248,7 +200,6 @@ public with sharing class RelatedObjectsController {
     private static String getSObjectNameFromId(Id recordId) {
         return recordId.getSObjectType().getDescribe().getName();
     }
-
 
     //================================================================================
     // Private Helper Methods - Validation
