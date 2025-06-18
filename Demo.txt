@@ -101,26 +101,59 @@ public with sharing class RelatedObjectsController {
         return wrappers;
     }
 
-    private static List<ConfigWrapper> wrapRelatedObjectConfigs(List<RelatedObject__mdt> configs, Id recordId) {
-        List<ConfigWrapper> wrappers = new List<ConfigWrapper>();
-        for (RelatedObject__mdt config : configs) {
-            if (!isValid(config)) continue;
-            wrappers.add(new RelatedObjectConfigWrapper(config, recordId));
-        }
-        return wrappers;
-    }
+    private static List<SObject> fetchCustomMetadata(String objectApiName, String soql) {
 
-    private static List<Home_Page_Objects_Configuratiom__mdt> fetchHomePageObjectConfigs(Integer limitVal) {
-        return [SELECT Fields__c, MasterLabel, Object__c, Subscriber__c FROM Home_Page_Objects_Configuratiom__mdt LIMIT :limitVal];
-    }
+if (Schema.getGlobalDescribe().get(objectApiName).getDescribe().isAccessible()) {
 
-    private static List<RelatedObject__mdt> fetchRelatedObjectConfigs(String objectName) {
-        return [SELECT RelatedObject__c, Fields__c, Lookup__c, MasterLabel FROM RelatedObject__mdt WHERE MasterLabel = :objectName];
-    }
+return Database.query(soql);
 
-    private static List<RelatedParentObject__mdt> fetchRelatedParentObjectConfigs(String childObjectName) {
-        return [SELECT MasterLabel, Fields__c, RelatedObject__c, Lookup__c FROM RelatedParentObject__mdt WHERE MasterLabel = :childObjectName];
-    }
+}
+
+return new List<SObject>();
+
+}
+
+
+
+private static List<Home_Page_Objects_Configuratiom__mdt> fetchHomePageObjectConfigs(Integer recordLimit) {
+
+return (List<Home_Page_Objects_Configuratiom__mdt>) fetchCustomMetadata(
+
+'Home_Page_Objects_Configuratiom__mdt',
+
+'SELECT Fields__c, MasterLabel, Object__c, Subscriber__c FROM Home_Page_Objects_Configuratiom__mdt LIMIT ' + recordLimit
+
+);
+
+}
+
+
+
+private static List<RelatedObject__mdt> fetchRelatedObjectConfigs(String objectName) {
+
+return (List<RelatedObject__mdt>) fetchCustomMetadata(
+
+'RelatedObject__mdt',
+
+'SELECT RelatedObject__c, Fields__c, Lookup__c, MasterLabel FROM RelatedObject__mdt WHERE MasterLabel = \'' + String.escapeSingleQuotes(objectName) + '\''
+
+);
+
+}
+
+
+
+private static List<RelatedParentObject__mdt> fetchRelatedParentObjectConfigs(String childObjectName) {
+
+return (List<RelatedParentObject__mdt>) fetchCustomMetadata(
+
+'RelatedParentObject__mdt',
+
+'SELECT MasterLabel, Fields__c, RelatedObject__c, Lookup__c FROM RelatedParentObject__mdt WHERE MasterLabel = \'' + String.escapeSingleQuotes(childObjectName) + '\''
+
+);
+
+}
 
     private static List<String> parseFields(String fieldsStr) {
         List<String> fieldList = new List<String>();
