@@ -22,7 +22,7 @@ public class RelatedRecordsFetcher {
             Id recordId = input.recordId;
             String output = '';
 
-            // Fetch metadata for this object
+            // Get the metadata config
             List<Your_Metadata__mdt> metadataList = [
                 SELECT Object__c, ParentObjects__c, ChildObjects__c
                 FROM Your_Metadata__mdt
@@ -31,43 +31,99 @@ public class RelatedRecordsFetcher {
             ];
 
             if (metadataList.isEmpty()) {
-                result.add(new OutputWrapper(summary = 'No metadata found for object: ' + objectName));
+                OutputWrapper out = new OutputWrapper();
+                out.summary = 'No metadata found for object: ' + objectName;
+                result.add(out);
                 continue;
             }
 
             Your_Metadata__mdt metadata = metadataList[0];
+            List<String> parentObjects = metadata.ParentObjects__c?.split(',') ?: new List<String>();
+            List<String> childObjects = metadata.ChildObjects__c?.split(',') ?: new List<String>();
 
-            // Parse parents and children
-            List<String> parentObjects = metadata.ParentObjects__c != null ?
-                metadata.ParentObjects__c.split(',') : new List<String>();
-            List<String> childObjects = metadata.ChildObjects__c != null ?
-                metadata.ChildObjects__c.split(',') : new List<String>();
+            // Get current record (needed to get lookup values)
+            SObject currentRecord;
+            try {
+                currentRecord = Database.query('SELECT Id FROM ' + objectName + ' WHERE Id = :recordId LIMIT 1');
+            } catch (Exception ex) {
+                OutputWrapper out = new OutputWrapper();
+                out.summary = 'Error fetching record of object: ' + objectName;
+                result.add(out);
+                continue;
+            }
 
+            // --- Parent Records ---
             output += 'Related Parent Records:\n';
-            for (String parentObj : parentObjects) {
-                parentObj = parentObj.trim();
-                try {
-                    String query = 'SELECT Id FROM ' + parentObj + ' WHERE ' + objectName + 'Id = :recordId';
-                    List<SObject> records = Database.query(query);
-                    output += '- ' + parentObj + ' (' + records.size() + ')\n';
-                } catch (Exception e) {
-                    output += '- ' + parentObj + ' (Error: ' + e.getMessage() + ')\n';
+            Map<String, Schema.SObjectField> currentFields = Schema.getGlobalDescribe().get(objectName).getDescribe().fields.getMap();
+
+            for (String parentObject : parentObjects) {
+                parentObject = parentObject.trim();
+                Boolean found = false;
+
+                for (String fieldName : currentFields.keySet()) {
+                    Schema.DescribeFieldResult describeField = currentFields.get(fieldName).getDescribe();
+                    if (describeField.getType() == Schema.DisplayType.REFERENCE &&
+                        describeField.getReferenceTo().contains(parentObject)) {
+                        try {
+                            Object refId = currentRecord.get(fieldName);
+                            if (refId != null) {
+                                List<SObject> parentRecs = Database.query('SELECT Id FROM ' + parentObject + ' WHERE Id = :refId');
+                                output += '- ' + parentObject + ' (' + parentRecs.size() + ')\n';
+                            } else {
+                                output += '- ' + parentObject + ' (No related record)\n';
+                            }
+                        } catch (Exception e) {
+                            output += '- ' + parentObject + ' (Error: ' + e.getMessage() + ')\n';
+                        }
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    output += '- ' + parentObject + ' (No reference field found on ' + objectName + ')\n';
                 }
             }
 
+            // --- Child Records ---
             output += '\nRelated Child Records:\n';
-            for (String childObj : childObjects) {
-                childObj = childObj.trim();
-                try {
-                    String query = 'SELECT Id FROM ' + childObj + ' WHERE ' + objectName + 'Id = :recordId';
-                    List<SObject> records = Database.query(query);
-                    output += '- ' + childObj + ' (' + records.size() + ')\n';
-                } catch (Exception e) {
-                    output += '- ' + childObj + ' (Error: ' + e.getMessage() + ')\n';
+
+            for (String childObject : childObjects) {
+                childObject = childObject.trim();
+                Boolean found = false;
+
+                Schema.SObjectType childType = Schema.getGlobalDescribe().get(childObject);
+                if (childType == null) {
+                    output += '- ' + childObject + ' (Invalid object)\n';
+                    continue;
+                }
+
+                Map<String, Schema.SObjectField> childFields = childType.getDescribe().fields.getMap();
+
+                for (String fieldName : childFields.keySet()) {
+                    Schema.DescribeFieldResult describeField = childFields.get(fieldName).getDescribe();
+                    if (describeField.getType() == Schema.DisplayType.REFERENCE &&
+                        describeField.getReferenceTo().contains(objectName)) {
+                        try {
+                            String query = 'SELECT Id FROM ' + childObject + ' WHERE ' + fieldName + ' = :recordId';
+                            List<SObject> childRecs = Database.query(query);
+                            output += '- ' + childObject + ' (' + childRecs.size() + ')\n';
+                        } catch (Exception e) {
+                            output += '- ' + childObject + ' (Error: ' + e.getMessage() + ')\n';
+                        }
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    output += '- ' + childObject + ' (No lookup field found referring to ' + objectName + ')\n';
                 }
             }
 
-            result.add(new OutputWrapper(summary = output));
+            OutputWrapper wrap = new OutputWrapper();
+            wrap.summary = output;
+            result.add(wrap);
         }
 
         return result;
