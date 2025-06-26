@@ -1,9 +1,8 @@
-public class RelatedRecordsFetcher {
+public with sharing class APM_apx_RelatedRecordsUtility {
 
     public class InputWrapper {
         @InvocableVariable(label='Record Id')
         public Id recordId;
-
         @InvocableVariable(label='Object Name')
         public String objectName;
     }
@@ -11,121 +10,201 @@ public class RelatedRecordsFetcher {
     public class OutputWrapper {
         @InvocableVariable(label='Related Records Summary')
         public String summary;
+        @InVocableVariable(label='Related Found')
+        public Boolean relatedFound;
+    }
+    
+    public class RelatedRecordsUtilityException extends Exception {}
+
+    private class RelationshipContext {
+        public String baseObjectName;
+        public Id baseRecordId;
+        public SObject baseRecord;
+        public Map<String, Schema.SObjectField> baseFields;
+        public Boolean foundAnyRelated = false;
     }
 
-    @InvocableMethod(label='Fetch Related Parent & Child Records')
+    @InvocableMethod(label='APM Fetch Related Parent & Child Records')
     public static List<OutputWrapper> fetchRelatedRecords(List<InputWrapper> inputs) {
-        List<OutputWrapper> result = new List<OutputWrapper>();
-
+        List<OutputWrapper> results = new List<OutputWrapper>();
         for (InputWrapper input : inputs) {
-            String objectName = input.objectName;
-            Id recordId = input.recordId;
-            String output = '';
-
-            // Get the metadata config
-            List<Your_Metadata__mdt> metadataList = [
-                SELECT Object__c, ParentObjects__c, ChildObjects__c
-                FROM Your_Metadata__mdt
-                WHERE Object__c = :objectName
-                LIMIT 1
-            ];
-
-            if (metadataList.isEmpty()) {
-                OutputWrapper out = new OutputWrapper();
-                out.summary = 'No metadata found for object: ' + objectName;
-                result.add(out);
-                continue;
-            }
-
-            Your_Metadata__mdt metadata = metadataList[0];
-            List<String> parentObjects = metadata.ParentObjects__c?.split(',') ?: new List<String>();
-            List<String> childObjects = metadata.ChildObjects__c?.split(',') ?: new List<String>();
-
-            // Get current record (needed to get lookup values)
-            SObject currentRecord;
-            try {
-                currentRecord = Database.query('SELECT Id FROM ' + objectName + ' WHERE Id = :recordId LIMIT 1');
-            } catch (Exception ex) {
-                OutputWrapper out = new OutputWrapper();
-                out.summary = 'Error fetching record of object: ' + objectName;
-                result.add(out);
-                continue;
-            }
-
-            // --- Parent Records ---
-            output += 'Related Parent Records:\n';
-            Map<String, Schema.SObjectField> currentFields = Schema.getGlobalDescribe().get(objectName).getDescribe().fields.getMap();
-
-            for (String parentObject : parentObjects) {
-                parentObject = parentObject.trim();
-                Boolean found = false;
-
-                for (String fieldName : currentFields.keySet()) {
-                    Schema.DescribeFieldResult describeField = currentFields.get(fieldName).getDescribe();
-                    if (describeField.getType() == Schema.DisplayType.REFERENCE &&
-                        describeField.getReferenceTo().contains(parentObject)) {
-                        try {
-                            Object refId = currentRecord.get(fieldName);
-                            if (refId != null) {
-                                List<SObject> parentRecs = Database.query('SELECT Id FROM ' + parentObject + ' WHERE Id = :refId');
-                                output += '- ' + parentObject + ' (' + parentRecs.size() + ')\n';
-                            } else {
-                                output += '- ' + parentObject + ' (No related record)\n';
-                            }
-                        } catch (Exception e) {
-                            output += '- ' + parentObject + ' (Error: ' + e.getMessage() + ')\n';
-                        }
-                        found = true;
-                        break;
-                    }
-                }
-
-                if (!found) {
-                    output += '- ' + parentObject + ' (No reference field found on ' + objectName + ')\n';
-                }
-            }
-
-            // --- Child Records ---
-            output += '\nRelated Child Records:\n';
-
-            for (String childObject : childObjects) {
-                childObject = childObject.trim();
-                Boolean found = false;
-
-                Schema.SObjectType childType = Schema.getGlobalDescribe().get(childObject);
-                if (childType == null) {
-                    output += '- ' + childObject + ' (Invalid object)\n';
-                    continue;
-                }
-
-                Map<String, Schema.SObjectField> childFields = childType.getDescribe().fields.getMap();
-
-                for (String fieldName : childFields.keySet()) {
-                    Schema.DescribeFieldResult describeField = childFields.get(fieldName).getDescribe();
-                    if (describeField.getType() == Schema.DisplayType.REFERENCE &&
-                        describeField.getReferenceTo().contains(objectName)) {
-                        try {
-                            String query = 'SELECT Id FROM ' + childObject + ' WHERE ' + fieldName + ' = :recordId';
-                            List<SObject> childRecs = Database.query(query);
-                            output += '- ' + childObject + ' (' + childRecs.size() + ')\n';
-                        } catch (Exception e) {
-                            output += '- ' + childObject + ' (Error: ' + e.getMessage() + ')\n';
-                        }
-                        found = true;
-                        break;
-                    }
-                }
-
-                if (!found) {
-                    output += '- ' + childObject + ' (No lookup field found referring to ' + objectName + ')\n';
-                }
-            }
-
-            OutputWrapper wrap = new OutputWrapper();
-            wrap.summary = output;
-            result.add(wrap);
+            results.add(processSingleInput(input));
         }
+        return results;
+    }
 
-        return result;
+    private static OutputWrapper processSingleInput(InputWrapper input) {
+        OutputWrapper wrap = new OutputWrapper();
+        try {
+            if (input.recordId == null || String.isBlank(input.objectName)) {
+                throw new RelatedRecordsUtilityException('Record Id and Object Name are required.');
+            }
+            APM_Archive_Button_Config__mdt meta = getMetadata(input.objectName);
+            if (meta == null) {
+                wrap.summary = 'No metadata configuration found for object: ' + input.objectName;
+                return wrap;
+            }
+            Map<String, Schema.SObjectField> baseObjectFields = Schema.getGlobalDescribe().get(input.objectName)?.getDescribe().fields.getMap();
+            if (baseObjectFields == null) {
+                throw new RelatedRecordsUtilityException('Invalid object: ' + input.objectName);
+            }
+            List<String> parentObjs = splitAndTrim(meta.Parent_Object_API_Names__c);
+            Set<String> parentRefFields = getReferenceFields(baseObjectFields, parentObjs);
+            parentRefFields.add('Id');
+            SObject baseRecord = safeSingleRecord(input.objectName, parentRefFields, input.recordId);
+            
+            RelationshipContext ctx = new RelationshipContext();
+            ctx.baseObjectName = input.objectName;
+            ctx.baseRecordId = input.recordId;
+            ctx.baseRecord = baseRecord;
+            ctx.baseFields = baseObjectFields;
+            
+            String parentSummary = buildParentSummary(ctx, parentObjs);
+            String childSummary = buildChildSummary(ctx, splitAndTrim(meta.Child_Objects_API_Name__c));
+            wrap.summary = parentSummary + '\n' + childSummary;
+            wrap.relatedFound = ctx.foundAnyRelated;
+        } catch (Exception ex) {
+            wrap.summary = 'Error: ' + ex.getMessage();
+            logException(ex, input.objectName);
+        }
+        return wrap;
+    }
+
+    private static String buildParentSummary(RelationshipContext ctx, List<String> parentObjects) {
+        String output = 'Related Parent Records:\n';
+        for (String parentObj : parentObjects) {
+            Set<String> refFields = getReferenceFields(ctx.baseFields, new List<String>{parentObj});
+            output += processParentRecord(ctx, parentObj, refFields.isEmpty() ? null : refFields.iterator().next());
+        }
+        return output;
+    }
+
+    private static String buildChildSummary(RelationshipContext ctx, List<String> childObjects) {
+        String output = 'Related Child Records:\n';
+        for (String childObj : childObjects) {
+            output += processChildRecord(ctx, childObj);
+        }
+        return output;
+    }
+    
+    private static String processParentRecord(RelationshipContext ctx, String parentObjectName, String referenceField) {
+        try {
+            if (String.isBlank(referenceField) || ctx.baseRecord == null) {
+                return '- ' + parentObjectName + ' (No reference field or record)\n';
+            }
+            Object refId = ctx.baseRecord.get(referenceField);
+            Integer count = 0;
+            if (refId != null) {
+                count = safeCountQuery(parentObjectName, null, refId);
+            }
+            if (count > 0) { ctx.foundAnyRelated = true; }
+            return '- ' + parentObjectName + ' (' + count + ')\n';
+        } catch (Exception e) {
+            return '- ' + parentObjectName + ' (Error: ' + e.getMessage() + ')\n';
+        }
+    }
+
+    private static String processChildRecord(RelationshipContext ctx, String childObjectName) {
+        try {
+            Map<String, Schema.SObjectField> childFields = Schema.getGlobalDescribe().get(childObjectName)?.getDescribe().fields.getMap();
+            if (childFields == null) {
+                return '- ' + childObjectName + ' (Invalid object)\n';
+            }
+            Set<String> refFields = getReferenceFields(childFields, new List<String>{ctx.baseObjectName});
+            if (refFields.isEmpty()) {
+                return '- ' + childObjectName + ' (No lookup found)\n';
+            }
+            String fieldForQuery = refFields.iterator().next();
+            Integer count = safeCountQuery(childObjectName, fieldForQuery, ctx.baseRecordId);
+            if (count > 0) { ctx.foundAnyRelated = true; }
+            return '- ' + childObjectName + ' (' + count + ')\n';
+        } catch (Exception e) {
+            return '- ' + childObjectName + ' (Error: ' + e.getMessage() + ')\n';
+        }
+    }
+
+    private static Set<String> getReferenceFields(Map<String, Schema.SObjectField> sourceFieldsMap, List<String> targetObjects) {
+        Set<String> referenceFields = new Set<String>();
+        Set<String> targetObjectSet = new Set<String>(targetObjects);
+        for (Schema.SObjectField field : sourceFieldsMap.values()) {
+            Schema.DescribeFieldResult dfr = field.getDescribe();
+            if (dfr.isAccessible() && dfr.getType() == Schema.DisplayType.REFERENCE) {
+                for (Schema.SObjectType t : dfr.getReferenceTo()) {
+                    if (targetObjectSet.contains(t.getDescribe().getName())) {
+                        referenceFields.add(dfr.getName());
+                    }
+                }
+            }
+        }
+        return referenceFields;
+    }
+
+    /**
+    * @description    FIX: Centralized, explicit permission validation method. This method is called
+    * immediately before a query to satisfy strict PMD rules.
+    */
+    private static void validateQueryPermissions(String objectName, Set<String> fields) {
+        Schema.SObjectType sObjType = Schema.getGlobalDescribe().get(objectName);
+        if (sObjType == null || !sObjType.getDescribe().isAccessible()) {
+            throw new RelatedRecordsUtilityException('No access to object: ' + objectName);
+        }
+        if (fields != null) {
+            Map<String, Schema.SObjectField> fieldMap = sObjType.getDescribe().fields.getMap();
+            for (String fieldName : fields) {
+                if (!fieldMap.containsKey(fieldName) || !fieldMap.get(fieldName).getDescribe().isAccessible()) {
+                    throw new RelatedRecordsUtilityException('No access to field: ' + objectName + '.' + fieldName);
+                }
+            }
+        }
+    }
+    
+    private static Integer safeCountQuery(String objectName, String fieldName, Object value) {
+        Set<String> fieldsToCheck = new Set<String>();
+        if(String.isNotBlank(fieldName)) {
+            fieldsToCheck.add(fieldName);
+        }
+        
+        // FIX: Explicit validation call immediately before the query.
+        validateQueryPermissions(objectName, fieldsToCheck);
+
+        String whereClause = String.isBlank(fieldName) ? 'Id = :value' : String.escapeSingleQuotes(fieldName) + ' = :value';
+        String query = 'SELECT COUNT() FROM ' + String.escapeSingleQuotes(objectName) + ' WHERE ' + whereClause;
+        return Database.countQuery(query);
+    }
+
+    private static SObject safeSingleRecord(String objectName, Set<String> fields, Id recordId) {
+        // FIX: Explicit validation call immediately before the query.
+        validateQueryPermissions(objectName, fields);
+
+        String query = 'SELECT ' + String.join(new List<String>(fields), ',') + 
+                       ' FROM ' + String.escapeSingleQuotes(objectName) + 
+                       ' WHERE Id = :recordId LIMIT 1';
+        List<SObject> records = Database.query(query);
+        
+        List<SObject> accessibleRecords = Security.stripInaccessible(AccessType.READABLE, records).getRecords();
+        return accessibleRecords.isEmpty() ? null : accessibleRecords[0];
+    }
+    
+    private static APM_Archive_Button_Config__mdt getMetadata(String objectName) {
+        // This query is safe because it uses a bind variable, not dynamic SOQL.
+        return [
+            SELECT Parent_Object_API_Names__c, Child_Objects_API_Name__c
+            FROM APM_Archive_Button_Config__mdt 
+            WHERE Object_API_Name__c = :objectName LIMIT 1
+        ];
+    }
+
+    private static List<String> splitAndTrim(String input) {
+        List<String> out = new List<String>();
+        if (String.isNotBlank(input)) {
+            for (String s : input.split(',')) {
+                if (String.isNotBlank(s)) { out.add(s.trim()); }
+            }
+        }
+        return out;
+    }
+
+    private static void logException(Exception ex, String objectName) {
+         System.debug(LoggingLevel.ERROR, 'APM_apx_RelatedRecordsUtility Error for ' + objectName + ': ' + ex.getMessage() + '\n' + ex.getStackTraceString());
     }
 }
