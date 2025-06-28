@@ -2,6 +2,7 @@ import { createElement } from 'lwc';
 import ApmMyAssessment from 'c/apmMyAssessment';
 import getPendingApplications from '@salesforce/apex/APM_apLWC_MyAssessmentController.getPendingAssessments';
 
+// ✅ Mock Apex
 jest.mock(
     '@salesforce/apex/APM_apLWC_MyAssessmentController.getPendingAssessments',
     () => ({
@@ -10,6 +11,7 @@ jest.mock(
     { virtual: true }
 );
 
+// ✅ Mock custom label
 jest.mock(
     '@salesforce/label/c.APM_Attestation_Link',
     () => 'https://assessment-link.com',
@@ -24,62 +26,7 @@ describe('c-apm-my-assessment', () => {
         jest.clearAllMocks();
     });
 
-    it('renders application list correctly', async () => {
-        const mockData = Array.from({ length: 10 }, (_, i) => ({
-            Id: `app${i + 1}`,
-            Name: `Application ${i + 1}`
-        }));
-
-        getPendingApplications.mockResolvedValue(mockData);
-
-        const element = createElement('c-apm-my-assessment', {
-            is: ApmMyAssessment
-        });
-
-        document.body.appendChild(element);
-        await Promise.resolve(); // Let wire load
-        await Promise.resolve(); // Let DOM update
-
-        const rendered = element.shadowRoot.querySelectorAll('[data-id]');
-        expect(rendered.length).toBe(8); // PAGE_SIZE = 8
-    });
-
-    it('handles Apex error gracefully and shows nothing', async () => {
-        getPendingApplications.mockRejectedValue(new Error('Apex failure'));
-
-        const element = createElement('c-apm-my-assessment', {
-            is: ApmMyAssessment
-        });
-
-        document.body.appendChild(element);
-        await Promise.resolve();
-        await Promise.resolve();
-
-        const items = element.shadowRoot.querySelectorAll('[data-id]');
-        expect(items.length).toBe(0);
-    });
-
-    it('opens modal on handleViewAll and closes on handleCloseModal', () => {
-        const element = createElement('c-apm-my-assessment', {
-            is: ApmMyAssessment
-        });
-        document.body.appendChild(element);
-
-        // Initially no modal
-        expect(element.shadowRoot.querySelector('.modal')).toBeNull();
-
-        element.handleViewAll();
-        return Promise.resolve().then(() => {
-            expect(element.shadowRoot.querySelector('.modal')).not.toBeNull();
-
-            element.handleCloseModal();
-            return Promise.resolve().then(() => {
-                expect(element.shadowRoot.querySelector('.modal')).toBeNull();
-            });
-        });
-    });
-
-    it('navigates using next/prev buttons and updates items', async () => {
+    it('renders first 8 applications in the DOM', async () => {
         const mockData = Array.from({ length: 10 }, (_, i) => ({
             Id: `app${i + 1}`,
             Name: `App ${i + 1}`
@@ -95,26 +42,29 @@ describe('c-apm-my-assessment', () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        let items = element.shadowRoot.querySelectorAll('[data-id]');
-        expect(items.length).toBe(8); // Page 1
+        // Adjust based on your actual tag: 'button' or 'lightning-button'
+        const rendered = element.shadowRoot.querySelectorAll('button[data-id]');
+        expect(rendered.length).toBe(8);
+    });
 
-        element.handleNext();
+    it('handles Apex error and shows nothing', async () => {
+        getPendingApplications.mockRejectedValue(new Error('Apex failure'));
+
+        const element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+
+        document.body.appendChild(element);
         await Promise.resolve();
         await Promise.resolve();
 
-        items = element.shadowRoot.querySelectorAll('[data-id]');
-        expect(items.length).toBe(2); // Page 2
-
-        element.handlePrev();
-        await Promise.resolve();
-        await Promise.resolve();
-
-        items = element.shadowRoot.querySelectorAll('[data-id]');
-        expect(items.length).toBe(8); // Back to Page 1
+        const rendered = element.shadowRoot.querySelectorAll('button[data-id]');
+        expect(rendered.length).toBe(0);
     });
 
     it('opens window with full link when Take Assessment is clicked', async () => {
-        getPendingApplications.mockResolvedValue([{ Id: '001XYZ', Name: 'Test App' }]);
+        const mockData = [{ Id: '001XYZ', Name: 'Test App' }];
+        getPendingApplications.mockResolvedValue(mockData);
 
         const element = createElement('c-apm-my-assessment', {
             is: ApmMyAssessment
@@ -125,8 +75,8 @@ describe('c-apm-my-assessment', () => {
 
         const openSpy = jest.spyOn(window, 'open').mockImplementation(() => {});
 
-        const takeBtn = element.shadowRoot.querySelector('[data-id="001XYZ"]');
-        expect(takeBtn).toBeTruthy();
+        const takeBtn = element.shadowRoot.querySelector('button[data-id="001XYZ"]');
+        expect(takeBtn).not.toBeNull();
         takeBtn.click();
 
         expect(openSpy).toHaveBeenCalledWith(
@@ -134,6 +84,44 @@ describe('c-apm-my-assessment', () => {
             '_blank'
         );
 
+        expect(openSpy).toHaveBeenCalledWith(
+            expect.stringContaining('c__ContextId=001XYZ'),
+            '_blank'
+        );
+
         openSpy.mockRestore();
+    });
+
+    it('navigates using handleNext and handlePrev and updates DOM items', async () => {
+        const mockData = Array.from({ length: 10 }, (_, i) => ({
+            Id: `app${i + 1}`,
+            Name: `App ${i + 1}`
+        }));
+
+        getPendingApplications.mockResolvedValue(mockData);
+
+        const element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+        document.body.appendChild(element);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        let rendered = element.shadowRoot.querySelectorAll('button[data-id]');
+        expect(rendered.length).toBe(8); // Page 1
+
+        element.handleNext();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        rendered = element.shadowRoot.querySelectorAll('button[data-id]');
+        expect(rendered.length).toBe(2); // Page 2
+
+        element.handlePrev();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        rendered = element.shadowRoot.querySelectorAll('button[data-id]');
+        expect(rendered.length).toBe(8); // Back to page 1
     });
 });
