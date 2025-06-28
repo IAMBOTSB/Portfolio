@@ -1,160 +1,139 @@
-/* <template>
-
-    <!-- Table Style Layout -->
-    <div class="TableCard">
-        <div class="TableCardHeader slds-grid slds-grid_align-spread">
-            <h2 class="TableCardTitle">Pending Assessment</h2>
-        </div>
-        <div class="TableCardBody">
-            <div style="height:100%" class="slds-scrollable_x">
-                <template if:true={pagedApplications.length}>
-                    <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_fixed-layout">
-                        <thead>
-                            <tr>
-                                <th scope="col">Name</th>
-                                <th scope="col">Due Date</th>
-                                <th scope="col">Status</th>
-                                <th scope="col">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template for:each={pagedApplications} for:item="app">
-                                <tr key={app.Id}>
-                                    <td class="truncate-cell" title={app.Name}>
-                                        {app.APM_Name__c}
-                                    </td>
-                                    <td>
-                                        <template if:true={app.DueDate__c}>{app.DueDate__c}</template>
-                                        <template if:false={app.DueDate__c}>TBD</template>
-                                    </td>
-                                    <td>
-                                        <span class="slds-badge" style="background:#fef3c7; color:#92400e;">
-                                            <span
-                                                style="width:0.5rem;height:0.5rem;background:#f59e42;border-radius:50%;display:inline-block;margin-right:0.5rem;"></span>
-                                            {app.APM_Assessment_Status__c}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <button
-                                            class="slds-button slds-button_icon slds-button_icon-border-filled slds-button_icon-x-small"
-                                            data-id={app.Id} onclick={handleTakeAssessment} title="Take Assessment">
-                                            <lightning-icon icon-name="utility:forward"
-                                                alternative-text="Take Assessment" size="xx-small"></lightning-icon>
-                                        </button>
-                                    </td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                </template>
-                <template if:false={pagedApplications.length}>
-                    <div class="no-records-container">
-                        <div class="slds-illustration slds-illustration_small">
-                            <svg>...</svg>
-                            <div class="slds-text-longform">
-                                <h3 class="slds-text-heading_medium">No Records Found</h3>
-                            </div>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </div>
-
-        <footer class="slds-card__footer slds-grid slds-wrap slds-p-around_medium slds-grid_align-spread">
-            <div class="slds-text-body_small slds-text-color_weak">
-                <template if:true={applications.length}>
-                    Showing <span>{resultStats.start}&nbsp;</span>
-                    to <span>{resultStats.end}&nbsp;</span>
-                    of <span>{resultStats.total}&nbsp;</span> results
-                </template>
-            </div>
-            <div>
-                <div class="slds-button-group" role="group">
-                    <button class="slds-button slds-button_icon slds-button_icon-border-filled slds-button_icon-x-small"
-                        onclick={handlePrev} disabled={isPrevDisabled} title="Previous">
-                        <lightning-icon icon-name="utility:chevronleft" alternative-text="Previous"
-                            size="xx-small"></lightning-icon>
-                    </button>
-                    <span style="margin: 0 0.5rem;">{page} / {totalPages}</span>
-                    <button class="slds-button slds-button_icon slds-button_icon-border-filled slds-button_icon-x-small"
-                        onclick={handleNext} disabled={isNextDisabled} title="Next">
-                        <lightning-icon icon-name="utility:chevronright" alternative-text="Next"
-                            size="xx-small"></lightning-icon>
-                    </button>
-                </div>
-            </div>
-        </footer>
-    </div>
-</template>
-
-
-import { LightningElement, wire, track } from 'lwc';
+import { createElement } from 'lwc';
+import ApmMyAssessment from 'c/apmMyAssessment';
 import getPendingApplications from '@salesforce/apex/APM_apLWC_MyAssessmentController.getPendingAssessments';
-import ASSESSMENT_LINK from '@salesforce/label/c.APM_Attestation_Link';
 
-const PAGE_SIZE = 8;
+// ✅ Mock Apex
+jest.mock(
+    '@salesforce/apex/APM_apLWC_MyAssessmentController.getPendingAssessments',
+    () => ({
+        default: jest.fn()
+    }),
+    { virtual: true }
+);
 
-export default class apmMyAssessment extends LightningElement {
-    @track applications = [];
-    @track error;
-    @track page = 1;
+// ✅ Mock Custom Label
+jest.mock(
+    '@salesforce/label/c.APM_Attestation_Link',
+    () => 'https://assessment-link.com',
+    { virtual: true }
+);
 
-    get totalPages() {
-        return Math.ceil(this.applications.length / PAGE_SIZE) || 1;
-    }
-
-    get pagedApplications() {
-        const start = (this.page - 1) * PAGE_SIZE;
-        return this.applications.slice(start, start + PAGE_SIZE);
-    }
-
-    get resultStats() {
-        const start = (this.page - 1) * PAGE_SIZE + 1;
-        const end = Math.min(this.page * PAGE_SIZE, this.applications.length);
-        return {
-            start, end, total: this.applications.length
-        };
-    }
-
-    get isPrevDisabled() {
-        return this.page === 1;
-    }
-
-    get isNextDisabled() {
-        return this.page === this.totalPages;
-    }
-
-    @wire(getPendingApplications)
-    wiredApplications({ error, data }) {
-        if (data) {
-            this.applications = data;
-            this.error = undefined;
-            this.page = 1;
-        } else if (error) {
-            this.error = error;
-            this.applications = [];
+describe('c-apm-my-assessment', () => {
+    afterEach(() => {
+        while (document.body.firstChild) {
+            document.body.removeChild(document.body.firstChild);
         }
-    }
+        jest.clearAllMocks();
+    });
 
-    handleTakeAssessment(event) {
-        const appId = event.currentTarget.dataset.id;
-        console.log('APPID :'+appId);
-        const link = ASSESSMENT_LINK;
-        const fullLink = link+"&c__ContextId="+appId+"&retURL=/"+appId
-        // eslint-disable-next-line no-console
-        console.log('Navigating to:', fullLink);
-        window.open(fullLink, '_blank');
-    }
+    it('renders exactly 8 rows on first page', async () => {
+        const mockData = Array.from({ length: 10 }, (_, i) => ({
+            Id: `app${i + 1}`,
+            APM_Name__c: `App ${i + 1}`,
+            DueDate__c: `2025-06-${10 + i}`,
+            APM_Assessment_Status__c: 'Pending'
+        }));
 
-    handlePrev() {
-        if (this.page > 1) {
-            this.page -= 1;
-        }
-    }
+        getPendingApplications.mockResolvedValue(mockData);
 
-    handleNext() {
-        if (this.page < this.totalPages) {
-            this.page += 1;
-        }
-    }
-} */
+        const element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+        document.body.appendChild(element);
+
+        await Promise.resolve();
+        await Promise.resolve();
+
+        const rows = element.shadowRoot.querySelectorAll('tbody tr');
+        expect(rows.length).toBe(8);
+    });
+
+    it('renders "No Records Found" when Apex fails', async () => {
+        getPendingApplications.mockRejectedValue(new Error('Apex error'));
+
+        const element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+        document.body.appendChild(element);
+
+        await Promise.resolve();
+        await Promise.resolve();
+
+        const emptyMsg = element.shadowRoot.querySelector('.slds-text-heading_medium');
+        expect(emptyMsg).not.toBeNull();
+        expect(emptyMsg.textContent).toBe('No Records Found');
+    });
+
+    it('opens window when Take Assessment is clicked', async () => {
+        const mockData = [{
+            Id: '001XYZ',
+            APM_Name__c: 'Test App',
+            DueDate__c: '2025-06-20',
+            APM_Assessment_Status__c: 'Pending'
+        }];
+
+        getPendingApplications.mockResolvedValue(mockData);
+
+        const element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+        document.body.appendChild(element);
+
+        await Promise.resolve();
+        await Promise.resolve();
+
+        const openSpy = jest.spyOn(window, 'open').mockImplementation(() => { });
+
+        const button = element.shadowRoot.querySelector('button[data-id="001XYZ"]');
+        expect(button).not.toBeNull();
+        button.click();
+
+        expect(openSpy).toHaveBeenCalledWith(
+            expect.stringContaining('https://assessment-link.com'),
+            '_blank'
+        );
+        expect(openSpy).toHaveBeenCalledWith(
+            expect.stringContaining('c__ContextId=001XYZ'),
+            '_blank'
+        );
+
+        openSpy.mockRestore();
+    });
+
+    it('goes to page 2 and renders 2 rows, then returns to 8 on page 1', async () => {
+        const mockData = Array.from({ length: 10 }, (_, i) => ({
+            Id: `app${i + 1}`,
+            APM_Name__c: `App ${i + 1}`,
+            DueDate__c: `2025-06-${10 + i}`,
+            APM_Assessment_Status__c: 'Pending'
+        }));
+
+        getPendingApplications.mockResolvedValue(mockData);
+
+        const element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+        document.body.appendChild(element);
+
+        await Promise.resolve();
+        await Promise.resolve();
+
+        const nextBtn = element.shadowRoot.querySelector('button[title="Next"]');
+        expect(nextBtn).not.toBeNull();
+
+        nextBtn.click();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        let rows = element.shadowRoot.querySelectorAll('tbody tr');
+        expect(rows.length).toBe(2); // Second page
+
+        const prevBtn = element.shadowRoot.querySelector('button[title="Previous"]');
+        prevBtn.click();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        rows = element.shadowRoot.querySelectorAll('tbody tr');
+        expect(rows.length).toBe(8); // Back to first page
+    });
+});
