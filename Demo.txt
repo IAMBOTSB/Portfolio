@@ -1,271 +1,221 @@
-[
-    {
-        "Id": "a01Dn000003yABCIA2",
-        "APM_Name__c": "Alpha Assessment",
-        "DueDate__c": "2025-08-15",
-        "APM_Assessment_Status__c": "Pending"
-    },
-    {
-        "Id": "a01Dn000003yABDIA2",
-        "APM_Name__c": "Bravo Assessment",
-        "DueDate__c": "2025-08-20",
-        "APM_Assessment_Status__c": "Pending"
-    },
-    {
-        "Id": "a01Dn000003yABEIA2",
-        "APM_Name__c": "Charlie Assessment",
-        "DueDate__c": null,
-        "APM_Assessment_Status__c": "In Progress"
-    },
-    {
-        "Id": "a01Dn000003yABFIA2",
-        "APM_Name__c": "Delta Assessment",
-        "DueDate__c": "2025-09-01",
-        "APM_Assessment_Status__c": "Pending"
-    },
-    {
-        "Id": "a01Dn000003yABGIA2",
-        "APM_Name__c": "Echo Assessment",
-        "DueDate__c": "2025-09-05",
-        "APM_Assessment_Status__c": "Pending"
-    },
-    {
-        "Id": "a01Dn000003yABHIA2",
-        "APM_Name__c": "Foxtrot Assessment",
-        "DueDate__c": "2025-09-10",
-        "APM_Assessment_Status__c": "Pending"
-    },
-    {
-        "Id": "a01Dn000003yABIIA2",
-        "APM_Name__c": "Golf Assessment",
-        "DueDate__c": "2025-09-12",
-        "APM_Assessment_Status__c": "Pending"
-    },
-    {
-        "Id": "a01Dn000003yABJIA2",
-        "APM_Name__c": "Hotel Assessment",
-        "DueDate__c": "2025-09-15",
-        "APM_Assessment_Status__c": "Pending"
-    },
-    {
-        "Id": "a01Dn000003yABKIA2",
-        "APM_Name__c": "India Assessment",
-        "DueDate__c": "2025-09-20",
-        "APM_Assessment_Status__c": "Pending"
-    },
-    {
-        "Id": "a01Dn000003yABLIA2",
-        "APM_Name__c": "Juliett Assessment",
-        "DueDate__c": "2025-09-25",
-        "APM_Assessment_Status__c": "Pending"
-    }
-]
+Here is the Jest test class for your Lightning Web Component (apmMyAssessment). It covers the important aspects of your component including:
+
+Rendering when data is present
+
+Rendering when no data is returned
+
+Button click events (handleNext, handlePrev, and handleTakeAssessment)
+
+Pagination behavior
+
+window.open behavior
 
 
 
+---
 
-_________________________________
+📁 File Structure
+
+Place your test file at:
+
+force-app/main/default/lwc/apmMyAssessment/__tests__/apmMyAssessment.test.js
+
+
+---
+
+✅ apmMyAssessment.test.js
 
 import { createElement } from 'lwc';
 import ApmMyAssessment from 'c/apmMyAssessment';
 import getPendingApplications from '@salesforce/apex/APM_apLWC_MyAssessmentController.getPendingAssessments';
 import ASSESSMENT_LINK from '@salesforce/label/c.APM_Attestation_Link';
 
-// Mock the Apex controller
-jest.mock(
-    '@salesforce/apex/APM_apLWC_MyAssessmentController.getPendingAssessments',
-    () => {
-        return {
-            default: jest.fn()
-        };
-    },
-    { virtual: true }
-);
+// Mock the Apex method
+jest.mock('@salesforce/apex/APM_apLWC_MyAssessmentController.getPendingAssessments', () => {
+    return {
+        default: jest.fn()
+    };
+}, { virtual: true });
 
 // Mock the Custom Label
-jest.mock(
-    '@salesforce/label/c.APM_Attestation_Link',
-    () => {
-        return { default: 'https://example.com/assessment?param=1' };
-    },
-    { virtual: true }
-);
-
-// Import mock data
-const mockAssessments = require('./data/pendingAssessments.json');
-const mockAssessmentsEmpty = [];
-const mockError = { body: { message: 'An internal server error has occurred' }};
+jest.mock('@salesforce/label/c.APM_Attestation_Link', () => 'https://example.com/assessment', { virtual: true });
 
 describe('c-apm-my-assessment', () => {
+    let element;
+
+    const mockData = Array.from({ length: 10 }, (_, i) => ({
+        Id: `00A${i}`,
+        APM_Name__c: `App ${i}`,
+        DueDate__c: i % 2 === 0 ? `2025-07-${i + 1}` : null,
+        APM_Assessment_Status__c: 'Pending'
+    }));
+
     afterEach(() => {
-        // The jsdom instance is shared across test cases in a single file so reset the DOM
+        // Cleanup the DOM
         while (document.body.firstChild) {
             document.body.removeChild(document.body.firstChild);
         }
         jest.clearAllMocks();
     });
-    
-    // Helper function to create and attach the component
-    async function createComponent(config, attach = true) {
-        const element = createElement('c-apm-my-assessment', {
+
+    it('renders table when applications are returned', async () => {
+        getPendingApplications.mockResolvedValue(mockData);
+
+        element = createElement('c-apm-my-assessment', {
             is: ApmMyAssessment
         });
-        Object.assign(element, config);
-        if (attach) {
-            document.body.appendChild(element);
-        }
-        // Wait for any rendered() or connected() callbacks
-        await Promise.resolve();
-        return element;
-    }
+        document.body.appendChild(element);
 
-    it('displays "No Records Found" when no assessments are returned', async () => {
-        // Arrange
-        getPendingApplications.mockResolvedValue(mockAssessmentsEmpty);
-        const element = await createComponent({});
-        
-        // Act: Wait for the wire adapter to provide the data
+        // Wait for wire
         await Promise.resolve();
 
-        // Assert
-        const noRecordsDiv = element.shadowRoot.querySelector('.no-records-container');
-        expect(noRecordsDiv).not.toBeNull();
-        expect(noRecordsDiv.textContent).toContain('No Records Found');
-        
-        const table = element.shadowRoot.querySelector('table');
-        expect(table).toBeNull();
+        const rows = element.shadowRoot.querySelectorAll('tbody tr');
+        expect(rows.length).toBe(8); // First page only shows 8
     });
 
-    it('displays a table of assessments when data is returned', async () => {
-        // Arrange
-        getPendingApplications.mockResolvedValue(mockAssessments);
-        const element = await createComponent({});
-        
-        // Act: Wait for the wire adapter to provide the data
-        await Promise.resolve();
-        
-        // Assert
-        const tableRows = element.shadowRoot.querySelectorAll('tbody tr');
-        expect(tableRows.length).toBe(8); // Page size is 8
+    it('shows TBD when DueDate__c is null', async () => {
+        getPendingApplications.mockResolvedValue([
+            {
+                Id: '00A1',
+                APM_Name__c: 'App 1',
+                DueDate__c: null,
+                APM_Assessment_Status__c: 'Pending'
+            }
+        ]);
 
-        const firstRowCells = tableRows[0].querySelectorAll('td');
-        expect(firstRowCells[0].textContent).toBe(mockAssessments[0].APM_Name__c);
-        expect(firstRowCells[1].textContent).toBe(mockAssessments[0].DueDate__c);
-        expect(firstRowCells[2].textContent).toContain(mockAssessments[0].APM_Assessment_Status__c);
-    });
-    
-    it('displays "TBD" for due date when the date is null', async () => {
-        // Arrange
-        getPendingApplications.mockResolvedValue(mockAssessments);
-        const element = await createComponent({});
-        
-        // Act: Wait for the wire adapter to provide the data
+        element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+        document.body.appendChild(element);
+
         await Promise.resolve();
-        
-        // Assert
-        const tableRows = element.shadowRoot.querySelectorAll('tbody tr');
-        // The third record in our mock data has a null DueDate__c
-        const thirdRowCells = tableRows[2].querySelectorAll('td');
-        expect(thirdRowCells[1].textContent).toBe('TBD');
+
+        const cell = element.shadowRoot.querySelector('td:nth-child(2)');
+        expect(cell.textContent).toBe('TBD');
     });
 
-    it('handles pagination correctly (next and previous)', async () => {
-        // Arrange
-        getPendingApplications.mockResolvedValue(mockAssessments);
-        const element = await createComponent({});
-        
-        // Act: Wait for the initial render
+    it('renders "No Records Found" when no data is returned', async () => {
+        getPendingApplications.mockResolvedValue([]);
+
+        element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+        document.body.appendChild(element);
+
         await Promise.resolve();
 
-        // Assert: Initial state (Page 1)
-        let paginationInfo = element.shadowRoot.querySelector('.slds-card__footer span[style*="margin"]');
-        expect(paginationInfo.textContent).toBe('1 / 2');
-
-        const prevButton = element.shadowRoot.querySelector('button[title="Previous"]');
-        const nextButton = element.shadowRoot.querySelector('button[title="Next"]');
-        expect(prevButton.disabled).toBe(true);
-        expect(nextButton.disabled).toBe(false);
-
-        // Act: Click Next
-        nextButton.click();
-        await Promise.resolve(); // Wait for re-render
-
-        // Assert: State after clicking Next (Page 2)
-        paginationInfo = element.shadowRoot.querySelector('.slds-card__footer span[style*="margin"]');
-        expect(paginationInfo.textContent).toBe('2 / 2');
-        let tableRows = element.shadowRoot.querySelectorAll('tbody tr');
-        expect(tableRows.length).toBe(2); // Remaining 2 records on page 2
-        expect(prevButton.disabled).toBe(false);
-        expect(nextButton.disabled).toBe(true);
-
-        // Act: Click Previous
-        prevButton.click();
-        await Promise.resolve(); // Wait for re-render
-
-        // Assert: State after clicking Previous (Page 1)
-        paginationInfo = element.shadowRoot.querySelector('.slds-card__footer span[style*="margin"]');
-        expect(paginationInfo.textContent).toBe('1 / 2');
-        tableRows = element.shadowRoot.querySelectorAll('tbody tr');
-        expect(tableRows.length).toBe(8);
-        expect(prevButton.disabled).toBe(true);
-        expect(nextButton.disabled).toBe(false);
+        const noRecords = element.shadowRoot.querySelector('.no-records-container');
+        expect(noRecords).not.toBeNull();
     });
 
-    it('navigates to the correct URL on "Take Assessment" click', async () => {
-        // Arrange
-        // Mock window.open to track calls
-        global.open = jest.fn();
-        
-        getPendingApplications.mockResolvedValue(mockAssessments);
-        const element = await createComponent({});
-        
-        // Act: Wait for the wire adapter to provide the data
+    it('handles pagination correctly', async () => {
+        getPendingApplications.mockResolvedValue(mockData);
+
+        element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+        document.body.appendChild(element);
+
         await Promise.resolve();
-        
-        const takeAssessmentButton = element.shadowRoot.querySelector('button[title="Take Assessment"]');
-        takeAssessmentButton.click();
-        
-        // Assert
-        const expectedAppId = mockAssessments[0].Id;
-        const expectedUrl = `${ASSESSMENT_LINK}&c__ContextId=${expectedAppId}&retURL=/${expectedAppId}`;
-        
-        expect(global.open).toHaveBeenCalledTimes(1);
-        expect(global.open).toHaveBeenCalledWith(expectedUrl, '_blank');
+
+        const nextBtn = element.shadowRoot.querySelector('button[title="Next"]');
+        nextBtn.click();
+
+        await Promise.resolve();
+
+        expect(element.page).toBe(2);
+
+        const prevBtn = element.shadowRoot.querySelector('button[title="Previous"]');
+        prevBtn.click();
+
+        await Promise.resolve();
+
+        expect(element.page).toBe(1);
     });
 
-    it('displays "No Records Found" when wire service returns an error', async () => {
-        // Arrange
-        getPendingApplications.mockRejectedValue(mockError);
-        const element = await createComponent({});
-        
-        // Act: Wait for the wire adapter to provide the error
+    it('opens assessment link on Take Assessment click', async () => {
+        getPendingApplications.mockResolvedValue([
+            {
+                Id: '00A1',
+                APM_Name__c: 'App 1',
+                DueDate__c: '2025-07-01',
+                APM_Assessment_Status__c: 'Pending'
+            }
+        ]);
+
+        element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+        document.body.appendChild(element);
+
         await Promise.resolve();
 
-        // Assert
-        const noRecordsDiv = element.shadowRoot.querySelector('.no-records-container');
-        expect(noRecordsDiv).not.toBeNull();
-        
-        const table = element.shadowRoot.querySelector('table');
-        expect(table).toBeNull();
+        // Spy on window.open
+        window.open = jest.fn();
+
+        const button = element.shadowRoot.querySelector('button[title="Take Assessment"]');
+        button.click();
+
+        expect(window.open).toHaveBeenCalledWith(
+            'https://example.com/assessment&c__ContextId=00A1&retURL=/00A1',
+            '_blank'
+        );
     });
 
-    it('is accessible when data is present', async () => {
-        // Arrange
-        getPendingApplications.mockResolvedValue(mockAssessments);
-        const element = await createComponent({});
+    it('disables Prev button on first page', async () => {
+        getPendingApplications.mockResolvedValue(mockData);
+
+        element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+        document.body.appendChild(element);
+
         await Promise.resolve();
 
-        // Assert
-        await expect(element).toBeAccessible();
+        const prevBtn = element.shadowRoot.querySelector('button[title="Previous"]');
+        expect(prevBtn.disabled).toBe(true);
     });
 
-    it('is accessible when no data is present', async () => {
-        // Arrange
-        getPendingApplications.mockResolvedValue(mockAssessmentsEmpty);
-        const element = await createComponent({});
+    it('disables Next button on last page', async () => {
+        getPendingApplications.mockResolvedValue(mockData);
+
+        element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+        document.body.appendChild(element);
+
         await Promise.resolve();
-        
-        // Assert
-        await expect(element).toBeAccessible();
+
+        // Move to last page
+        element.page = element.totalPages;
+
+        await Promise.resolve();
+
+        const nextBtn = element.shadowRoot.querySelector('button[title="Next"]');
+        expect(nextBtn.disabled).toBe(true);
     });
 });
+
+
+---
+
+🧪 Run the test:
+
+Use the following command:
+
+npm run test:unit
+
+
+---
+
+📝 Notes:
+
+mockData simulates 10 applications to test pagination logic.
+
+Ensure you're using the Salesforce CLI with SFDX project and LWC Jest test setup.
+
+You can trim/add test cases based on what's most critical for your component’s usage.
+
+
+Would you also like a code coverage report or help in setting up sfdx-lwc-jest?
+
