@@ -1,210 +1,132 @@
-public with sharing class APM_apx_RelatedRecordsUtility {
+import { createElement } from 'lwc';
+import ApmMyAssessment from 'c/apmMyAssessment';
+import getPendingApplications from '@salesforce/apex/APM_apLWC_MyAssessmentController.getPendingAssessments';
 
-    public class InputWrapper {
-        @InvocableVariable(label='Record Id')
-        public Id recordId;
-        @InvocableVariable(label='Object Name')
-        public String objectName;
-    }
+jest.mock(
+    '@salesforce/apex/APM_apLWC_MyAssessmentController.getPendingAssessments',
+    () => ({
+        default: jest.fn()
+    }),
+    { virtual: true }
+);
 
-    public class OutputWrapper {
-        @InvocableVariable(label='Related Records Summary')
-        public String summary;
-        @InVocableVariable(label='Related Found')
-        public Boolean relatedFound;
-    }
-    
-    public class RelatedRecordsUtilityException extends Exception {}
+jest.mock(
+    '@salesforce/label/c.APM_Attestation_Link',
+    () => 'https://assessment-link.com',
+    { virtual: true }
+);
 
-    private class RelationshipContext {
-        public String baseObjectName;
-        public Id baseRecordId;
-        public SObject baseRecord;
-        public Map<String, Schema.SObjectField> baseFields;
-        public Boolean foundAnyRelated = false;
-    }
-
-    @InvocableMethod(label='APM Fetch Related Parent & Child Records')
-    public static List<OutputWrapper> fetchRelatedRecords(List<InputWrapper> inputs) {
-        List<OutputWrapper> results = new List<OutputWrapper>();
-        for (InputWrapper input : inputs) {
-            results.add(processSingleInput(input));
+describe('c-apm-my-assessment', () => {
+    afterEach(() => {
+        while (document.body.firstChild) {
+            document.body.removeChild(document.body.firstChild);
         }
-        return results;
-    }
+        jest.clearAllMocks();
+    });
 
-    private static OutputWrapper processSingleInput(InputWrapper input) {
-        OutputWrapper wrap = new OutputWrapper();
-        try {
-            if (input.recordId == null || String.isBlank(input.objectName)) {
-                throw new RelatedRecordsUtilityException('Record Id and Object Name are required.');
-            }
-            APM_Archive_Button_Config__mdt meta = getMetadata(input.objectName);
-            if (meta == null) {
-                wrap.summary = 'No metadata configuration found for object: ' + input.objectName;
-                return wrap;
-            }
-            Map<String, Schema.SObjectField> baseObjectFields = Schema.getGlobalDescribe().get(input.objectName)?.getDescribe().fields.getMap();
-            if (baseObjectFields == null) {
-                throw new RelatedRecordsUtilityException('Invalid object: ' + input.objectName);
-            }
-            List<String> parentObjs = splitAndTrim(meta.Parent_Object_API_Names__c);
-            Set<String> parentRefFields = getReferenceFields(baseObjectFields, parentObjs);
-            parentRefFields.add('Id');
-            SObject baseRecord = safeSingleRecord(input.objectName, parentRefFields, input.recordId);
-            
-            RelationshipContext ctx = new RelationshipContext();
-            ctx.baseObjectName = input.objectName;
-            ctx.baseRecordId = input.recordId;
-            ctx.baseRecord = baseRecord;
-            ctx.baseFields = baseObjectFields;
-            
-            String parentSummary = buildParentSummary(ctx, parentObjs);
-            String childSummary = buildChildSummary(ctx, splitAndTrim(meta.Child_Objects_API_Name__c));
-            wrap.summary = parentSummary + '\n' + childSummary;
-            wrap.relatedFound = ctx.foundAnyRelated;
-        } catch (Exception ex) {
-            wrap.summary = 'Error: ' + ex.getMessage();
-            logException(ex, input.objectName);
-        }
-        return wrap;
-    }
+    it('renders application list correctly (based on rendered DOM)', async () => {
+        const mockData = Array.from({ length: 10 }, (_, i) => ({
+            Id: `app${i + 1}`,
+            Name: `Application ${i + 1}`
+        }));
+        getPendingApplications.mockResolvedValue(mockData);
 
-    private static String buildParentSummary(RelationshipContext ctx, List<String> parentObjects) {
-        String output = 'Related Parent Records:\n';
-        for (String parentObj : parentObjects) {
-            Set<String> refFields = getReferenceFields(ctx.baseFields, new List<String>{parentObj});
-            output += processParentRecord(ctx, parentObj, refFields.isEmpty() ? null : refFields.iterator().next());
-        }
-        return output;
-    }
+        const element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
 
-    private static String buildChildSummary(RelationshipContext ctx, List<String> childObjects) {
-        String output = 'Related Child Records:\n';
-        for (String childObj : childObjects) {
-            output += processChildRecord(ctx, childObj);
-        }
-        return output;
-    }
-    
-    private static String processParentRecord(RelationshipContext ctx, String parentObjectName, String referenceField) {
-        try {
-            if (String.isBlank(referenceField) || ctx.baseRecord == null) {
-                return '- ' + parentObjectName + ' (No reference field or record)\n';
-            }
-            Object refId = ctx.baseRecord.get(referenceField);
-            Integer count = 0;
-            if (refId != null) {
-                count = safeCountQuery(parentObjectName, null, refId);
-            }
-            if (count > 0) { ctx.foundAnyRelated = true; }
-            return '- ' + parentObjectName + ' (' + count + ')\n';
-        } catch (Exception e) {
-            return '- ' + parentObjectName + ' (Error: ' + e.getMessage() + ')\n';
-        }
-    }
+        document.body.appendChild(element);
+        await Promise.resolve();
 
-    private static String processChildRecord(RelationshipContext ctx, String childObjectName) {
-        try {
-            Map<String, Schema.SObjectField> childFields = Schema.getGlobalDescribe().get(childObjectName)?.getDescribe().fields.getMap();
-            if (childFields == null) {
-                return '- ' + childObjectName + ' (Invalid object)\n';
-            }
-            Set<String> refFields = getReferenceFields(childFields, new List<String>{ctx.baseObjectName});
-            if (refFields.isEmpty()) {
-                return '- ' + childObjectName + ' (No lookup found)\n';
-            }
-            String fieldForQuery = refFields.iterator().next();
-            Integer count = safeCountQuery(childObjectName, fieldForQuery, ctx.baseRecordId);
-            if (count > 0) { ctx.foundAnyRelated = true; }
-            return '- ' + childObjectName + ' (' + count + ')\n';
-        } catch (Exception e) {
-            return '- ' + childObjectName + ' (Error: ' + e.getMessage() + ')\n';
-        }
-    }
+        // Validate rendered elements — not private fields
+        const renderedItems = element.shadowRoot.querySelectorAll('[data-id]');
+        expect(renderedItems.length).toBe(8); // PAGE_SIZE
+    });
 
-    private static Set<String> getReferenceFields(Map<String, Schema.SObjectField> sourceFieldsMap, List<String> targetObjects) {
-        Set<String> referenceFields = new Set<String>();
-        Set<String> targetObjectSet = new Set<String>(targetObjects);
-        for (Schema.SObjectField field : sourceFieldsMap.values()) {
-            Schema.DescribeFieldResult dfr = field.getDescribe();
-            if (dfr.isAccessible() && dfr.getType() == Schema.DisplayType.REFERENCE) {
-                for (Schema.SObjectType t : dfr.getReferenceTo()) {
-                    if (targetObjectSet.contains(t.getDescribe().getName())) {
-                        referenceFields.add(dfr.getName());
-                    }
-                }
-            }
-        }
-        return referenceFields;
-    }
+    it('shows no data if Apex fails (error handling)', async () => {
+        getPendingApplications.mockRejectedValue(new Error('Apex failed'));
 
-    /**
-    * @description    FIX: Centralized, explicit permission validation method. This method is called
-    * immediately before a query to satisfy strict PMD rules.
-    */
-    private static void validateQueryPermissions(String objectName, Set<String> fields) {
-        Schema.SObjectType sObjType = Schema.getGlobalDescribe().get(objectName);
-        if (sObjType == null || !sObjType.getDescribe().isAccessible()) {
-            throw new RelatedRecordsUtilityException('No access to object: ' + objectName);
-        }
-        if (fields != null) {
-            Map<String, Schema.SObjectField> fieldMap = sObjType.getDescribe().fields.getMap();
-            for (String fieldName : fields) {
-                if (!fieldMap.containsKey(fieldName) || !fieldMap.get(fieldName).getDescribe().isAccessible()) {
-                    throw new RelatedRecordsUtilityException('No access to field: ' + objectName + '.' + fieldName);
-                }
-            }
-        }
-    }
-    
-    private static Integer safeCountQuery(String objectName, String fieldName, Object value) {
-        Set<String> fieldsToCheck = new Set<String>();
-        if(String.isNotBlank(fieldName)) {
-            fieldsToCheck.add(fieldName);
-        }
-        
-        // FIX: Explicit validation call immediately before the query.
-        validateQueryPermissions(objectName, fieldsToCheck);
+        const element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+        document.body.appendChild(element);
 
-        String whereClause = String.isBlank(fieldName) ? 'Id = :value' : String.escapeSingleQuotes(fieldName) + ' = :value';
-        String query = 'SELECT COUNT() FROM ' + String.escapeSingleQuotes(objectName) + ' WHERE ' + whereClause;
-        return Database.countQuery(query);
-    }
+        await Promise.resolve();
 
-    private static SObject safeSingleRecord(String objectName, Set<String> fields, Id recordId) {
-        // FIX: Explicit validation call immediately before the query.
-        validateQueryPermissions(objectName, fields);
+        // It shouldn't render any assessments
+        const renderedItems = element.shadowRoot.querySelectorAll('[data-id]');
+        expect(renderedItems.length).toBe(0);
+    });
 
-        String query = 'SELECT ' + String.join(new List<String>(fields), ',') + 
-                       ' FROM ' + String.escapeSingleQuotes(objectName) + 
-                       ' WHERE Id = :recordId LIMIT 1';
-        List<SObject> records = Database.query(query);
-        
-        List<SObject> accessibleRecords = Security.stripInaccessible(AccessType.READABLE, records).getRecords();
-        return accessibleRecords.isEmpty() ? null : accessibleRecords[0];
-    }
-    
-    private static APM_Archive_Button_Config__mdt getMetadata(String objectName) {
-        // This query is safe because it uses a bind variable, not dynamic SOQL.
-        return [
-            SELECT Parent_Object_API_Names__c, Child_Objects_API_Name__c
-            FROM APM_Archive_Button_Config__mdt 
-            WHERE Object_API_Name__c = :objectName LIMIT 1
-        ];
-    }
+    it('navigates to assessment link on Take button click', async () => {
+        getPendingApplications.mockResolvedValue([
+            { Id: '001ABC123', Name: 'Test App' }
+        ]);
 
-    private static List<String> splitAndTrim(String input) {
-        List<String> out = new List<String>();
-        if (String.isNotBlank(input)) {
-            for (String s : input.split(',')) {
-                if (String.isNotBlank(s)) { out.add(s.trim()); }
-            }
-        }
-        return out;
-    }
+        const element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+        document.body.appendChild(element);
+        await Promise.resolve();
 
-    private static void logException(Exception ex, String objectName) {
-         System.debug(LoggingLevel.ERROR, 'APM_apx_RelatedRecordsUtility Error for ' + objectName + ': ' + ex.getMessage() + '\n' + ex.getStackTraceString());
-    }
-}
+        const openSpy = jest.spyOn(window, 'open').mockImplementation(() => {});
+
+        const takeBtn = element.shadowRoot.querySelector('[data-id="001ABC123"]');
+        expect(takeBtn).toBeTruthy();
+        takeBtn.click();
+
+        expect(openSpy).toHaveBeenCalledWith(
+            expect.stringContaining('https://assessment-link.com'),
+            '_blank'
+        );
+        expect(openSpy).toHaveBeenCalledWith(
+            expect.stringContaining('c__ContextId=001ABC123'),
+            '_blank'
+        );
+
+        openSpy.mockRestore();
+    });
+
+    it('handles pagination with next and previous', async () => {
+        getPendingApplications.mockResolvedValue(
+            Array.from({ length: 10 }, (_, i) => ({ Id: `app${i + 1}` }))
+        );
+
+        const element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+
+        document.body.appendChild(element);
+        await Promise.resolve();
+
+        // Initially, page 1, 8 items
+        let items = element.shadowRoot.querySelectorAll('[data-id]');
+        expect(items.length).toBe(8);
+
+        // Move to next page
+        element.handleNext();
+        await Promise.resolve();
+        items = element.shadowRoot.querySelectorAll('[data-id]');
+        expect(items.length).toBe(2);
+
+        // Back to previous page
+        element.handlePrev();
+        await Promise.resolve();
+        items = element.shadowRoot.querySelectorAll('[data-id]');
+        expect(items.length).toBe(8);
+    });
+
+    it('toggles modal using handleViewAll and handleCloseModal', () => {
+        const element = createElement('c-apm-my-assessment', {
+            is: ApmMyAssessment
+        });
+
+        document.body.appendChild(element);
+
+        expect(element.showModal).toBe(false);
+        element.handleViewAll();
+        expect(element.showModal).toBe(true);
+        element.handleCloseModal();
+        expect(element.showModal).toBe(false);
+    });
+});
