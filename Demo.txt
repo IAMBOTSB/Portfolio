@@ -1,139 +1,271 @@
+[
+    {
+        "Id": "a01Dn000003yABCIA2",
+        "APM_Name__c": "Alpha Assessment",
+        "DueDate__c": "2025-08-15",
+        "APM_Assessment_Status__c": "Pending"
+    },
+    {
+        "Id": "a01Dn000003yABDIA2",
+        "APM_Name__c": "Bravo Assessment",
+        "DueDate__c": "2025-08-20",
+        "APM_Assessment_Status__c": "Pending"
+    },
+    {
+        "Id": "a01Dn000003yABEIA2",
+        "APM_Name__c": "Charlie Assessment",
+        "DueDate__c": null,
+        "APM_Assessment_Status__c": "In Progress"
+    },
+    {
+        "Id": "a01Dn000003yABFIA2",
+        "APM_Name__c": "Delta Assessment",
+        "DueDate__c": "2025-09-01",
+        "APM_Assessment_Status__c": "Pending"
+    },
+    {
+        "Id": "a01Dn000003yABGIA2",
+        "APM_Name__c": "Echo Assessment",
+        "DueDate__c": "2025-09-05",
+        "APM_Assessment_Status__c": "Pending"
+    },
+    {
+        "Id": "a01Dn000003yABHIA2",
+        "APM_Name__c": "Foxtrot Assessment",
+        "DueDate__c": "2025-09-10",
+        "APM_Assessment_Status__c": "Pending"
+    },
+    {
+        "Id": "a01Dn000003yABIIA2",
+        "APM_Name__c": "Golf Assessment",
+        "DueDate__c": "2025-09-12",
+        "APM_Assessment_Status__c": "Pending"
+    },
+    {
+        "Id": "a01Dn000003yABJIA2",
+        "APM_Name__c": "Hotel Assessment",
+        "DueDate__c": "2025-09-15",
+        "APM_Assessment_Status__c": "Pending"
+    },
+    {
+        "Id": "a01Dn000003yABKIA2",
+        "APM_Name__c": "India Assessment",
+        "DueDate__c": "2025-09-20",
+        "APM_Assessment_Status__c": "Pending"
+    },
+    {
+        "Id": "a01Dn000003yABLIA2",
+        "APM_Name__c": "Juliett Assessment",
+        "DueDate__c": "2025-09-25",
+        "APM_Assessment_Status__c": "Pending"
+    }
+]
+
+
+
+
+_________________________________
+
 import { createElement } from 'lwc';
 import ApmMyAssessment from 'c/apmMyAssessment';
 import getPendingApplications from '@salesforce/apex/APM_apLWC_MyAssessmentController.getPendingAssessments';
+import ASSESSMENT_LINK from '@salesforce/label/c.APM_Attestation_Link';
 
-// ✅ Mock Apex
+// Mock the Apex controller
 jest.mock(
     '@salesforce/apex/APM_apLWC_MyAssessmentController.getPendingAssessments',
-    () => ({
-        default: jest.fn()
-    }),
+    () => {
+        return {
+            default: jest.fn()
+        };
+    },
     { virtual: true }
 );
 
-// ✅ Mock Custom Label
+// Mock the Custom Label
 jest.mock(
     '@salesforce/label/c.APM_Attestation_Link',
-    () => 'https://assessment-link.com',
+    () => {
+        return { default: 'https://example.com/assessment?param=1' };
+    },
     { virtual: true }
 );
+
+// Import mock data
+const mockAssessments = require('./data/pendingAssessments.json');
+const mockAssessmentsEmpty = [];
+const mockError = { body: { message: 'An internal server error has occurred' }};
 
 describe('c-apm-my-assessment', () => {
     afterEach(() => {
+        // The jsdom instance is shared across test cases in a single file so reset the DOM
         while (document.body.firstChild) {
             document.body.removeChild(document.body.firstChild);
         }
         jest.clearAllMocks();
     });
-
-    it('renders exactly 8 rows on first page', async () => {
-        const mockData = Array.from({ length: 10 }, (_, i) => ({
-            Id: `app${i + 1}`,
-            APM_Name__c: `App ${i + 1}`,
-            DueDate__c: `2025-06-${10 + i}`,
-            APM_Assessment_Status__c: 'Pending'
-        }));
-
-        getPendingApplications.mockResolvedValue(mockData);
-
+    
+    // Helper function to create and attach the component
+    async function createComponent(config, attach = true) {
         const element = createElement('c-apm-my-assessment', {
             is: ApmMyAssessment
         });
-        document.body.appendChild(element);
-
+        Object.assign(element, config);
+        if (attach) {
+            document.body.appendChild(element);
+        }
+        // Wait for any rendered() or connected() callbacks
         await Promise.resolve();
+        return element;
+    }
+
+    it('displays "No Records Found" when no assessments are returned', async () => {
+        // Arrange
+        getPendingApplications.mockResolvedValue(mockAssessmentsEmpty);
+        const element = await createComponent({});
+        
+        // Act: Wait for the wire adapter to provide the data
         await Promise.resolve();
 
-        const rows = element.shadowRoot.querySelectorAll('tbody tr');
-        expect(rows.length).toBe(8);
+        // Assert
+        const noRecordsDiv = element.shadowRoot.querySelector('.no-records-container');
+        expect(noRecordsDiv).not.toBeNull();
+        expect(noRecordsDiv.textContent).toContain('No Records Found');
+        
+        const table = element.shadowRoot.querySelector('table');
+        expect(table).toBeNull();
     });
 
-    it('renders "No Records Found" when Apex fails', async () => {
-        getPendingApplications.mockRejectedValue(new Error('Apex error'));
-
-        const element = createElement('c-apm-my-assessment', {
-            is: ApmMyAssessment
-        });
-        document.body.appendChild(element);
-
+    it('displays a table of assessments when data is returned', async () => {
+        // Arrange
+        getPendingApplications.mockResolvedValue(mockAssessments);
+        const element = await createComponent({});
+        
+        // Act: Wait for the wire adapter to provide the data
         await Promise.resolve();
-        await Promise.resolve();
+        
+        // Assert
+        const tableRows = element.shadowRoot.querySelectorAll('tbody tr');
+        expect(tableRows.length).toBe(8); // Page size is 8
 
-        const emptyMsg = element.shadowRoot.querySelector('.slds-text-heading_medium');
-        expect(emptyMsg).not.toBeNull();
-        expect(emptyMsg.textContent).toBe('No Records Found');
+        const firstRowCells = tableRows[0].querySelectorAll('td');
+        expect(firstRowCells[0].textContent).toBe(mockAssessments[0].APM_Name__c);
+        expect(firstRowCells[1].textContent).toBe(mockAssessments[0].DueDate__c);
+        expect(firstRowCells[2].textContent).toContain(mockAssessments[0].APM_Assessment_Status__c);
+    });
+    
+    it('displays "TBD" for due date when the date is null', async () => {
+        // Arrange
+        getPendingApplications.mockResolvedValue(mockAssessments);
+        const element = await createComponent({});
+        
+        // Act: Wait for the wire adapter to provide the data
+        await Promise.resolve();
+        
+        // Assert
+        const tableRows = element.shadowRoot.querySelectorAll('tbody tr');
+        // The third record in our mock data has a null DueDate__c
+        const thirdRowCells = tableRows[2].querySelectorAll('td');
+        expect(thirdRowCells[1].textContent).toBe('TBD');
     });
 
-    it('opens window when Take Assessment is clicked', async () => {
-        const mockData = [{
-            Id: '001XYZ',
-            APM_Name__c: 'Test App',
-            DueDate__c: '2025-06-20',
-            APM_Assessment_Status__c: 'Pending'
-        }];
-
-        getPendingApplications.mockResolvedValue(mockData);
-
-        const element = createElement('c-apm-my-assessment', {
-            is: ApmMyAssessment
-        });
-        document.body.appendChild(element);
-
-        await Promise.resolve();
+    it('handles pagination correctly (next and previous)', async () => {
+        // Arrange
+        getPendingApplications.mockResolvedValue(mockAssessments);
+        const element = await createComponent({});
+        
+        // Act: Wait for the initial render
         await Promise.resolve();
 
-        const openSpy = jest.spyOn(window, 'open').mockImplementation(() => { });
+        // Assert: Initial state (Page 1)
+        let paginationInfo = element.shadowRoot.querySelector('.slds-card__footer span[style*="margin"]');
+        expect(paginationInfo.textContent).toBe('1 / 2');
 
-        const button = element.shadowRoot.querySelector('button[data-id="001XYZ"]');
-        expect(button).not.toBeNull();
-        button.click();
+        const prevButton = element.shadowRoot.querySelector('button[title="Previous"]');
+        const nextButton = element.shadowRoot.querySelector('button[title="Next"]');
+        expect(prevButton.disabled).toBe(true);
+        expect(nextButton.disabled).toBe(false);
 
-        expect(openSpy).toHaveBeenCalledWith(
-            expect.stringContaining('https://assessment-link.com'),
-            '_blank'
-        );
-        expect(openSpy).toHaveBeenCalledWith(
-            expect.stringContaining('c__ContextId=001XYZ'),
-            '_blank'
-        );
+        // Act: Click Next
+        nextButton.click();
+        await Promise.resolve(); // Wait for re-render
 
-        openSpy.mockRestore();
+        // Assert: State after clicking Next (Page 2)
+        paginationInfo = element.shadowRoot.querySelector('.slds-card__footer span[style*="margin"]');
+        expect(paginationInfo.textContent).toBe('2 / 2');
+        let tableRows = element.shadowRoot.querySelectorAll('tbody tr');
+        expect(tableRows.length).toBe(2); // Remaining 2 records on page 2
+        expect(prevButton.disabled).toBe(false);
+        expect(nextButton.disabled).toBe(true);
+
+        // Act: Click Previous
+        prevButton.click();
+        await Promise.resolve(); // Wait for re-render
+
+        // Assert: State after clicking Previous (Page 1)
+        paginationInfo = element.shadowRoot.querySelector('.slds-card__footer span[style*="margin"]');
+        expect(paginationInfo.textContent).toBe('1 / 2');
+        tableRows = element.shadowRoot.querySelectorAll('tbody tr');
+        expect(tableRows.length).toBe(8);
+        expect(prevButton.disabled).toBe(true);
+        expect(nextButton.disabled).toBe(false);
     });
 
-    it('goes to page 2 and renders 2 rows, then returns to 8 on page 1', async () => {
-        const mockData = Array.from({ length: 10 }, (_, i) => ({
-            Id: `app${i + 1}`,
-            APM_Name__c: `App ${i + 1}`,
-            DueDate__c: `2025-06-${10 + i}`,
-            APM_Assessment_Status__c: 'Pending'
-        }));
-
-        getPendingApplications.mockResolvedValue(mockData);
-
-        const element = createElement('c-apm-my-assessment', {
-            is: ApmMyAssessment
-        });
-        document.body.appendChild(element);
-
+    it('navigates to the correct URL on "Take Assessment" click', async () => {
+        // Arrange
+        // Mock window.open to track calls
+        global.open = jest.fn();
+        
+        getPendingApplications.mockResolvedValue(mockAssessments);
+        const element = await createComponent({});
+        
+        // Act: Wait for the wire adapter to provide the data
         await Promise.resolve();
-        await Promise.resolve();
+        
+        const takeAssessmentButton = element.shadowRoot.querySelector('button[title="Take Assessment"]');
+        takeAssessmentButton.click();
+        
+        // Assert
+        const expectedAppId = mockAssessments[0].Id;
+        const expectedUrl = `${ASSESSMENT_LINK}&c__ContextId=${expectedAppId}&retURL=/${expectedAppId}`;
+        
+        expect(global.open).toHaveBeenCalledTimes(1);
+        expect(global.open).toHaveBeenCalledWith(expectedUrl, '_blank');
+    });
 
-        const nextBtn = element.shadowRoot.querySelector('button[title="Next"]');
-        expect(nextBtn).not.toBeNull();
-
-        nextBtn.click();
-        await Promise.resolve();
-        await Promise.resolve();
-
-        let rows = element.shadowRoot.querySelectorAll('tbody tr');
-        expect(rows.length).toBe(2); // Second page
-
-        const prevBtn = element.shadowRoot.querySelector('button[title="Previous"]');
-        prevBtn.click();
-        await Promise.resolve();
+    it('displays "No Records Found" when wire service returns an error', async () => {
+        // Arrange
+        getPendingApplications.mockRejectedValue(mockError);
+        const element = await createComponent({});
+        
+        // Act: Wait for the wire adapter to provide the error
         await Promise.resolve();
 
-        rows = element.shadowRoot.querySelectorAll('tbody tr');
-        expect(rows.length).toBe(8); // Back to first page
+        // Assert
+        const noRecordsDiv = element.shadowRoot.querySelector('.no-records-container');
+        expect(noRecordsDiv).not.toBeNull();
+        
+        const table = element.shadowRoot.querySelector('table');
+        expect(table).toBeNull();
+    });
+
+    it('is accessible when data is present', async () => {
+        // Arrange
+        getPendingApplications.mockResolvedValue(mockAssessments);
+        const element = await createComponent({});
+        await Promise.resolve();
+
+        // Assert
+        await expect(element).toBeAccessible();
+    });
+
+    it('is accessible when no data is present', async () => {
+        // Arrange
+        getPendingApplications.mockResolvedValue(mockAssessmentsEmpty);
+        const element = await createComponent({});
+        await Promise.resolve();
+        
+        // Assert
+        await expect(element).toBeAccessible();
     });
 });
