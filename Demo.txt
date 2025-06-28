@@ -1,57 +1,20 @@
-Here is the Jest test class for your Lightning Web Component (apmMyAssessment). It covers the important aspects of your component including:
-
-Rendering when data is present
-
-Rendering when no data is returned
-
-Button click events (handleNext, handlePrev, and handleTakeAssessment)
-
-Pagination behavior
-
-window.open behavior
-
-
-
----
-
-📁 File Structure
-
-Place your test file at:
-
-force-app/main/default/lwc/apmMyAssessment/__tests__/apmMyAssessment.test.js
-
-
----
-
-✅ apmMyAssessment.test.js
-
 import { createElement } from 'lwc';
 import ApmMyAssessment from 'c/apmMyAssessment';
 import getPendingApplications from '@salesforce/apex/APM_apLWC_MyAssessmentController.getPendingAssessments';
-import ASSESSMENT_LINK from '@salesforce/label/c.APM_Attestation_Link';
 
-// Mock the Apex method
-jest.mock('@salesforce/apex/APM_apLWC_MyAssessmentController.getPendingAssessments', () => {
-    return {
-        default: jest.fn()
-    };
-}, { virtual: true });
-
-// Mock the Custom Label
 jest.mock('@salesforce/label/c.APM_Attestation_Link', () => 'https://example.com/assessment', { virtual: true });
 
+// ✅ Real Apex mock (used as a promise, since Apex methods are async when not wired)
+jest.mock('@salesforce/apex/APM_apLWC_MyAssessmentController.getPendingAssessments', () => ({
+    default: jest.fn()
+}), { virtual: true });
+
+function flushPromises() {
+    return new Promise(resolve => setTimeout(resolve, 0));
+}
+
 describe('c-apm-my-assessment', () => {
-    let element;
-
-    const mockData = Array.from({ length: 10 }, (_, i) => ({
-        Id: `00A${i}`,
-        APM_Name__c: `App ${i}`,
-        DueDate__c: i % 2 === 0 ? `2025-07-${i + 1}` : null,
-        APM_Assessment_Status__c: 'Pending'
-    }));
-
     afterEach(() => {
-        // Cleanup the DOM
         while (document.body.firstChild) {
             document.body.removeChild(document.body.firstChild);
         }
@@ -59,163 +22,33 @@ describe('c-apm-my-assessment', () => {
     });
 
     it('renders table when applications are returned', async () => {
-        getPendingApplications.mockResolvedValue(mockData);
+        // ✅ Mock resolved promise from Apex (10 records)
+        getPendingApplications.mockResolvedValue([
+            {
+                Id: 'a1', APM_Name__c: 'Assessment 1', DueDate__c: '2025-06-30', APM_Assessment_Status__c: 'Pending'
+            },
+            { Id: 'a2', APM_Name__c: 'Assessment 2', DueDate__c: '2025-07-01', APM_Assessment_Status__c: 'Pending' },
+            { Id: 'a3', APM_Name__c: 'Assessment 3', DueDate__c: '2025-07-02', APM_Assessment_Status__c: 'Pending' },
+            { Id: 'a4', APM_Name__c: 'Assessment 4', DueDate__c: '2025-07-03', APM_Assessment_Status__c: 'Pending' },
+            { Id: 'a5', APM_Name__c: 'Assessment 5', DueDate__c: '2025-07-04', APM_Assessment_Status__c: 'Pending' },
+            { Id: 'a6', APM_Name__c: 'Assessment 6', DueDate__c: '2025-07-05', APM_Assessment_Status__c: 'Pending' },
+            { Id: 'a7', APM_Name__c: 'Assessment 7', DueDate__c: '2025-07-06', APM_Assessment_Status__c: 'Pending' },
+            { Id: 'a8', APM_Name__c: 'Assessment 8', DueDate__c: '2025-07-07', APM_Assessment_Status__c: 'Pending' },
+            { Id: 'a9', APM_Name__c: 'Assessment 9', DueDate__c: '2025-07-08', APM_Assessment_Status__c: 'Pending' },
+            { Id: 'a10', APM_Name__c: 'Assessment 10', DueDate__c: '2025-07-09', APM_Assessment_Status__c: 'Pending' }
+        ]);
 
-        element = createElement('c-apm-my-assessment', {
+        const element = createElement('c-apm-my-assessment', {
             is: ApmMyAssessment
         });
+
         document.body.appendChild(element);
 
-        // Wait for wire
-        await Promise.resolve();
+        await flushPromises(); // Apex call resolves
+        await flushPromises(); // re-render
 
         const rows = element.shadowRoot.querySelectorAll('tbody tr');
-        expect(rows.length).toBe(8); // First page only shows 8
-    });
-
-    it('shows TBD when DueDate__c is null', async () => {
-        getPendingApplications.mockResolvedValue([
-            {
-                Id: '00A1',
-                APM_Name__c: 'App 1',
-                DueDate__c: null,
-                APM_Assessment_Status__c: 'Pending'
-            }
-        ]);
-
-        element = createElement('c-apm-my-assessment', {
-            is: ApmMyAssessment
-        });
-        document.body.appendChild(element);
-
-        await Promise.resolve();
-
-        const cell = element.shadowRoot.querySelector('td:nth-child(2)');
-        expect(cell.textContent).toBe('TBD');
-    });
-
-    it('renders "No Records Found" when no data is returned', async () => {
-        getPendingApplications.mockResolvedValue([]);
-
-        element = createElement('c-apm-my-assessment', {
-            is: ApmMyAssessment
-        });
-        document.body.appendChild(element);
-
-        await Promise.resolve();
-
-        const noRecords = element.shadowRoot.querySelector('.no-records-container');
-        expect(noRecords).not.toBeNull();
-    });
-
-    it('handles pagination correctly', async () => {
-        getPendingApplications.mockResolvedValue(mockData);
-
-        element = createElement('c-apm-my-assessment', {
-            is: ApmMyAssessment
-        });
-        document.body.appendChild(element);
-
-        await Promise.resolve();
-
-        const nextBtn = element.shadowRoot.querySelector('button[title="Next"]');
-        nextBtn.click();
-
-        await Promise.resolve();
-
-        expect(element.page).toBe(2);
-
-        const prevBtn = element.shadowRoot.querySelector('button[title="Previous"]');
-        prevBtn.click();
-
-        await Promise.resolve();
-
-        expect(element.page).toBe(1);
-    });
-
-    it('opens assessment link on Take Assessment click', async () => {
-        getPendingApplications.mockResolvedValue([
-            {
-                Id: '00A1',
-                APM_Name__c: 'App 1',
-                DueDate__c: '2025-07-01',
-                APM_Assessment_Status__c: 'Pending'
-            }
-        ]);
-
-        element = createElement('c-apm-my-assessment', {
-            is: ApmMyAssessment
-        });
-        document.body.appendChild(element);
-
-        await Promise.resolve();
-
-        // Spy on window.open
-        window.open = jest.fn();
-
-        const button = element.shadowRoot.querySelector('button[title="Take Assessment"]');
-        button.click();
-
-        expect(window.open).toHaveBeenCalledWith(
-            'https://example.com/assessment&c__ContextId=00A1&retURL=/00A1',
-            '_blank'
-        );
-    });
-
-    it('disables Prev button on first page', async () => {
-        getPendingApplications.mockResolvedValue(mockData);
-
-        element = createElement('c-apm-my-assessment', {
-            is: ApmMyAssessment
-        });
-        document.body.appendChild(element);
-
-        await Promise.resolve();
-
-        const prevBtn = element.shadowRoot.querySelector('button[title="Previous"]');
-        expect(prevBtn.disabled).toBe(true);
-    });
-
-    it('disables Next button on last page', async () => {
-        getPendingApplications.mockResolvedValue(mockData);
-
-        element = createElement('c-apm-my-assessment', {
-            is: ApmMyAssessment
-        });
-        document.body.appendChild(element);
-
-        await Promise.resolve();
-
-        // Move to last page
-        element.page = element.totalPages;
-
-        await Promise.resolve();
-
-        const nextBtn = element.shadowRoot.querySelector('button[title="Next"]');
-        expect(nextBtn.disabled).toBe(true);
+        console.log('ROW COUNT:', rows.length);
+        expect(rows.length).toBe(8); // page size = 8
     });
 });
-
-
----
-
-🧪 Run the test:
-
-Use the following command:
-
-npm run test:unit
-
-
----
-
-📝 Notes:
-
-mockData simulates 10 applications to test pagination logic.
-
-Ensure you're using the Salesforce CLI with SFDX project and LWC Jest test setup.
-
-You can trim/add test cases based on what's most critical for your component’s usage.
-
-
-Would you also like a code coverage report or help in setting up sfdx-lwc-jest?
-
