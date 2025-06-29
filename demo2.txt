@@ -1,0 +1,266 @@
+<template>
+    <template if:true={relatedData}>
+        <div class="slds-grid slds-wrap">
+            <template for:each={relatedData} for:item="objectData" for:index="objectIndex">
+                <div key={objectData.objectName}
+                    class="slds-col slds-size_1-of-1 slds-small-size_1-of-1 slds-medium-size_1-of-2 slds-large-size_1-of-3 slds-p-around_xx-small">
+                    <div class="TableCard">
+                        <div class="TableCardHeader slds-grid slds-grid_align-spread">
+                            <h2 class="TableCardTitle">{objectData.objectLabel}</h2>
+                        </div>
+                        <div class="TableCardBody">
+                            <div style="height:100%" class="slds-scrollable_x">
+                                <template if:true={objectData.records.length}>
+                                    <table
+                                        class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_fixed-layout">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">Name</th>
+                                                <template for:each={objectData.fields} for:item="field">
+                                                    <th scope="col" key={field.apiName}>{field.label}</th>
+                                                </template>
+                                                <th scope="col">&nbsp;</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template for:each={objectData.records} for:item="record"
+                                                for:index="recordIndex">
+                                                <tr key={record.recordUrl}>
+                                                    <td class="truncate-cell" title={record.name}>
+                                                        <a href={record.recordUrl} rel="noopener"
+                                                            class="slds-text-link">{record.name}</a>
+                                                    </td>
+                                                    <template for:each={record.fieldValues} for:item="fieldValue">
+                                                        <td key={fieldValue} class="truncate-cell" title={fieldValue}>
+                                                            {fieldValue}</td>
+                                                    </template>
+                                                    <td style="text-align: -webkit-center;">
+                                                        <lightning-icon icon-name="utility:preview" size="xx-small"
+                                                            alternative-text="See Details" title="See Details"
+                                                            data-index={recordIndex} data-objectindex={objectIndex}
+                                                            onclick={handlePrintRecord}>
+                                                        </lightning-icon>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </template>
+
+                                <template if:false={objectData.records.length}>
+                                    <div class="no-records-container">
+                                        <div class="slds-illustration slds-illustration_small">
+                                            <svg>...</svg>
+                                            <div class="slds-text-longform">
+                                                <h3 class="slds-text-heading_medium">No Records Found</h3>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            <div class="slds-col slds-size_1-of-1 slds-small-size_1-of-1 slds-medium-size_1-of-2 slds-large-size_1-of-3 slds-p-around_xx-small">
+                <c-apm-my-assessment style="height:100%"></c-apm-my-assessment>
+            </div>
+        </div>
+    </template>
+    <template if:true={error}>
+        <p class="slds-text-color_error">Error: {error.body.message}</p>
+    </template>
+
+    <template if:true={showmodal}>
+        <section role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="modal-heading-01"
+            class="slds-modal slds-fade-in-open">
+            <div class="slds-modal__container">
+                <div class="slds-modal__header">
+                    <h1 id="modal-heading-01" class="slds-modal__title slds-hyphenate" tabindex="-1">Related
+                        Records/Actions</h1>
+                </div>
+                <div class="slds-modal__content slds-p-around_medium" id="modal-content-id-1">
+                    <div class="slds-form-element">
+                        <div class="slds-form-element__control">
+
+                            <template if:true={related.length}>
+                                <lightning-accordion allow-multiple-sections-open>
+                                    <template for:each={related} for:item="objectData">
+                                        <lightning-accordion-section key={objectData.objectName}
+                                            name={objectData.objectName} label={objectData.objectLabel}>
+                                            <div class="slds-grid slds-wrap">
+                                                <template if:true={objectData.records.length}>
+                                                    <template for:each={objectData.records} for:item="record">
+                                                        <div key={record.recordUrl}
+                                                            class="slds-col slds-size_1-of-1 slds-small-size_1-of-2 slds-medium-size_1-of-2">
+                                                            <a href={record.recordUrl} target="_blank"
+                                                                class="modalrecordcard slds-box slds-box_x-small slds-m-around_x-small slds-text-link_reset"
+                                                                style="display:block; text-decoration:none;">
+                                                                <div>
+                                                                    <template for:each={record.displayFields}
+                                                                        for:item="field">
+                                                                        <div key={field.label}
+                                                                            class="slds-m-vertical_xx-small">
+                                                                            <span style="font-weight:600"
+                                                                                class="slds-text-title">{field.label} :
+                                                                            </span>
+                                                                            <span>{field.value}</span>
+                                                                        </div>
+                                                                    </template>
+                                                                </div>
+                                                            </a>
+                                                        </div>
+                                                    </template>
+                                                </template>
+                                                <template if:false={objectData.records.length}>
+                                                    <p>No Records Found</p>
+                                                </template>
+                                            </div>
+                                        </lightning-accordion-section>
+                                    </template>
+                                </lightning-accordion>
+                            </template>
+                            <template if:false={related.length}>
+                                <p>No Records Found</p>
+                            </template>
+
+                            <template if:true={error}>
+                                <p>Error: {error.body.message}</p>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                <div class="slds-modal__footer">
+                    <button
+                        style="color: color-mix(in srgb, var(--slds-g-color-accent-2) 70%,transparent);"
+                        onclick={handlemodalclose} class="slds-button slds-button_neutral"
+                        aria-label="Cancel and close">Cancel</button>
+                </div>
+            </div>
+        </section>
+        <div class="slds-backdrop slds-backdrop_open" role="presentation"></div>
+    </template>
+
+</template>
+
+
+import { LightningElement, track } from 'lwc';
+import getRelatedObjectsAndRecords from '@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords';
+import getRelated from '@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords';
+import getRelatedParent from '@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords';
+
+function formatLabel(apiName) {
+    // Remove '__c', '__mdt', and '__r' suffixes, then replace underscores with spaces
+    return apiName.replace(/__c$|__mdt$|__r$/i, '').replace(/_/g, ' ');
+}
+
+function getFieldLabel(fieldName) {
+    // Use the part before the dot if present, then format
+    const namePart = fieldName.includes('.') ? fieldName.split('.')[0] : fieldName;
+    return formatLabel(namePart);
+}
+
+
+
+export default class ApmMyRecords extends LightningElement {
+   @track relatedData = [];
+    @track related = [];
+    @track error;
+    @track showmodal = false;
+
+    connectedCallback() {
+        this.fetchRelatedData();
+    }
+
+    fetchRelatedData() {
+        getRelatedObjectsAndRecords()
+            .then((data) => {
+                this.relatedData = Object.entries(data).map(([objectName, value]) => ({
+                    objectName: objectName,
+                    objectLabel: formatLabel(objectName),
+                    fields: value.fields
+                        .filter(field => field !== 'Id' && field !== 'Name')
+                        .map(field => ({
+                            apiName: field,
+                            label: getFieldLabel(field)
+                        })),
+                    records: value.records.map(rec => ({
+                        name: rec.Name,
+                        recordUrl: '/' + rec.Id,
+                        raw: rec, // Store the full record for logging
+                        fieldValues: value.fields
+                            .filter(field => field !== 'Id' && field !== 'Name')
+                            .map(fieldName => rec[fieldName] || 'N/A')
+                    }))
+                }));
+                this.error = undefined;
+            })
+            .catch((error) => {
+                this.error = error;
+                this.relatedData = [];
+            });
+    }
+
+    handlePrintRecord(event) {
+        const recordIndex = event.target.dataset.index;
+        const objectIndex = event.target.dataset.objectindex;
+        const record = this.relatedData[objectIndex].records[recordIndex];
+
+        let id = '';
+        if (record.recordUrl) {
+            id = record.recordUrl.replace('/', '');
+        } else if (record.raw && record.raw.Id) {
+            id = record.raw.Id;
+        }
+
+        // Fetch both related records and parent records
+        Promise.all([
+            getRelated({ recordId: id }),
+            getRelatedParent({ childRecordId: id })
+        ])
+            .then(([relatedData, parentData]) => {
+
+                // Utility function to process data objects (relatedData or parentData)
+                function processData(data) {
+                    return Object.entries(data).map(([objectName, value]) => ({
+                        objectName: objectName,
+                        objectLabel: formatLabel(objectName),
+                        fields: value.fields
+                            .filter(field => field !== 'Id' && field !== 'Name')
+                            .map(field => ({
+                                apiName: field,
+                                label: formatLabel(field)
+                            })),
+                        records: value.records.map(rec => ({
+                            name: rec.Name,
+                            recordUrl: '/' + rec.Id,
+                            displayFields: value.fields
+                                .filter(field => field !== 'Id' && field !== 'Name')
+                                .map(fieldName => ({
+                                    label: getFieldLabel(fieldName),
+                                    value: rec[fieldName] || 'N/A'
+                                }))
+                        }))
+                    }));
+                }
+
+                // Usage:
+                const processedRelatedData = processData(relatedData);
+                const processedParentData = processData(parentData);
+                // Combine related and parent records into a single list
+                this.related = [...processedRelatedData, ...processedParentData];
+                this.error = undefined;
+            })
+            .catch((error) => {
+                this.error = error;
+                this.related = [];
+            });
+
+        this.showmodal = true;
+    }
+
+    handlemodalclose() {
+        this.related = [];
+        this.showmodal = false;
+    }
+}
