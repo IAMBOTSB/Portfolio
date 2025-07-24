@@ -1,3 +1,180 @@
+//-----------------------JestClass---------------------------------//
+// import { createElement } from 'lwc';
+// import ApmMyRecords from 'c/aPM_MyRecords';
+// import getRelatedObjectsAndRecords from '@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords';
+// import getRelated from '@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords';
+// import getRelatedParent from '@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords';
+
+// // Mock JSON data
+// const mockRelatedObjectsAndRecords = require('./data/relatedObjectsAndRecords.json');
+// const mockRelated = require('./data/relatedRecords.json');
+// const mockParent = require('./data/parentRecords.json');
+
+// // Mock Apex
+// jest.mock('@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords', () => ({
+//     default: jest.fn()
+// }), { virtual: true });
+
+// jest.mock('@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords', () => ({
+//     default: jest.fn()
+// }), { virtual: true });
+
+// jest.mock('@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords', () => ({
+//     default: jest.fn()
+// }), { virtual: true });
+
+// describe('c-a-p-m-my-records', () => {
+//     afterEach(() => {
+//         while (document.body.firstChild) {
+//             document.body.removeChild(document.body.firstChild);
+//         }
+//         jest.clearAllMocks();
+//     });
+
+//     async function flushPromises() {
+//         return Promise.resolve();
+//     }
+
+//     it('renders tables for relatedData', async () => {
+//         getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedObjectsAndRecords);
+
+//         const element = createElement('c-a-p-m-my-records', {
+//             is: ApmMyRecords
+//         });
+//         document.body.appendChild(element);
+
+//         await flushPromises();
+
+//         // Should render two tables (Account and Contact)
+//         const tables = element.shadowRoot.querySelectorAll('table.slds-table');
+//         expect(tables.length).toBe(2);
+
+//         // Should render record links
+//         const recordLinks = element.shadowRoot.querySelectorAll('a.slds-text-link');
+//         expect(recordLinks.length).toBe(3);
+//     });
+
+//     it('renders "No Records Found" when no records', async () => {
+//         getRelatedObjectsAndRecords.mockResolvedValue({
+//             EmptyObj: {
+//                 fields: ['Id', 'Name', 'Custom_Field__c'],
+//                 records: []
+//             }
+//         });
+
+//         const element = createElement('c-a-p-m-my-records', {
+//             is: ApmMyRecords
+//         });
+//         document.body.appendChild(element);
+
+//         await flushPromises();
+
+//         const noRecords = element.shadowRoot.querySelector('.no-records-container h3');
+//         expect(noRecords).not.toBeNull();
+//         expect(noRecords.textContent).toBe('No Records Found');
+//     });
+
+//     it('shows error message when Apex fails', async () => {
+//         getRelatedObjectsAndRecords.mockRejectedValue({ body: { message: 'Test error' } });
+
+//         const element = createElement('c-a-p-m-my-records', {
+//             is: ApmMyRecords
+//         });
+//         document.body.appendChild(element);
+
+//         await flushPromises();
+
+//         const errorMsg = element.shadowRoot.querySelector('.slds-text-color_error');
+//         expect(errorMsg).not.toBeNull();
+//         expect(errorMsg.textContent).toContain('Test error');
+//     });
+
+//     it('opens modal and loads related/parent records on icon click', async () => {
+//         getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedObjectsAndRecords);
+//         getRelated.mockResolvedValue(mockRelated);
+//         getRelatedParent.mockResolvedValue(mockParent);
+
+//         const element = createElement('c-a-p-m-my-records', {
+//             is: ApmMyRecords
+//         });
+//         document.body.appendChild(element);
+
+//         await flushPromises();
+
+//         // Simulate click on lightning-icon for first Account record
+//         const icon = element.shadowRoot.querySelector('lightning-icon[data-index="0"][data-objectindex="0"]');
+//         expect(icon).not.toBeNull();
+//         icon.click();
+
+//         await flushPromises();
+//         await flushPromises();
+
+//         // Modal should now be open
+//         expect(element.shadowRoot.querySelector('.slds-modal.slds-fade-in-open')).not.toBeNull();
+
+//         // Should display related/parent records in accordion
+//         const accordionSections = element.shadowRoot.querySelectorAll('lightning-accordion-section');
+//         expect(accordionSections.length).toBeGreaterThan(0);
+//     });
+
+//     it('shows "No Records Found" in modal accordion if no related records', async () => {
+//         getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedObjectsAndRecords);
+//         getRelated.mockResolvedValue({});
+//         getRelatedParent.mockResolvedValue({});
+
+//         const element = createElement('c-a-p-m-my-records', {
+//             is: ApmMyRecords
+//         });
+//         document.body.appendChild(element);
+
+//         await flushPromises();
+
+//         // Click icon to open modal
+//         const icon = element.shadowRoot.querySelector('lightning-icon[data-index="0"][data-objectindex="0"]');
+//         icon.click();
+
+//         await flushPromises();
+//         await flushPromises();
+
+//         // Should show "No Records Found" in modal
+//         // Looks for a <p> after the accordion
+//         const modalNoRecords = [...element.shadowRoot.querySelectorAll('p')]
+//             .find(p => p.textContent.includes('No Records Found'));
+//         expect(modalNoRecords).not.toBeNull();
+//         expect(modalNoRecords.textContent).toContain('No Records Found');
+//     });
+
+//     it('handles modal close', async () => {
+//         getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedObjectsAndRecords);
+//         getRelated.mockResolvedValue(mockRelated);
+//         getRelatedParent.mockResolvedValue(mockParent);
+
+//         const element = createElement('c-a-p-m-my-records', {
+//             is: ApmMyRecords
+//         });
+//         document.body.appendChild(element);
+
+//         await flushPromises();
+
+//         // Open modal
+//         const icon = element.shadowRoot.querySelector('lightning-icon[data-index="0"][data-objectindex="0"]');
+//         icon.click();
+
+//         await flushPromises();
+//         await flushPromises();
+
+//         // Click Cancel button to close modal
+//         const cancelBtn = element.shadowRoot.querySelector('button[aria-label="Cancel and close"]');
+//         cancelBtn.click();
+
+//         await flushPromises();
+
+//         // Modal should close
+//         expect(element.shadowRoot.querySelector('.slds-modal.slds-fade-in-open')).toBeNull();
+//     });
+
+// });
+
 //----------------------------HTML-----------------------------------------//
 {/* <template>
     <template if:true={pagedObjects}>
@@ -177,169 +354,169 @@
 </template> */}
 
 // ----------------------JS---------------------------------//
-import { LightningElement, track } from 'lwc';
-import getRelatedObjectsAndRecords from '@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords';
-import getRelated from '@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords';
-import getRelatedParent from '@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords';
+// import { LightningElement, track } from 'lwc';
+// import getRelatedObjectsAndRecords from '@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords';
+// import getRelated from '@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords';
+// import getRelatedParent from '@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords';
 
-const PAGE_SIZE = 10;
+// const PAGE_SIZE = 10;
 
-function formatLabel(apiName) {
-    // Remove '__c', '__mdt', and '__r' suffixes, then replace underscores with spaces
-    return apiName.replace(/__c$|__mdt$|__r$/i, '').replace(/_/g, ' ');
-}
+// function formatLabel(apiName) {
+//     // Remove '__c', '__mdt', and '__r' suffixes, then replace underscores with spaces
+//     return apiName.replace(/__c$|__mdt$|__r$/i, '').replace(/_/g, ' ');
+// }
 
-function getFieldLabel(fieldName) {
-    // Use the part before the dot if present, then format
-    const namePart = fieldName.includes('.') ? fieldName.split('.')[0] : fieldName;
-    return formatLabel(namePart);
-}
+// function getFieldLabel(fieldName) {
+//     // Use the part before the dot if present, then format
+//     const namePart = fieldName.includes('.') ? fieldName.split('.')[0] : fieldName;
+//     return formatLabel(namePart);
+// }
 
 
 
-export default class ApmMyRecords extends LightningElement {
-   @track relatedData = [];
-   @track pages = {};
-    @track related = [];
-    @track error;
-    @track showmodal = false;
+// export default class ApmMyRecords extends LightningElement {
+//    @track relatedData = [];
+//    @track pages = {};
+//     @track related = [];
+//     @track error;
+//     @track showmodal = false;
 
-    connectedCallback() {
-        this.fetchRelatedData();
-    }
+//     connectedCallback() {
+//         this.fetchRelatedData();
+//     }
 
-    fetchRelatedData() {
-        getRelatedObjectsAndRecords()
-            .then((data) => {
-                this.relatedData = Object.entries(data).map(([objectName, value]) => ({
-                    objectName: objectName,
-                    objectLabel: formatLabel(objectName),
-                    fields: value.fields
-                        .filter(field => field !== 'Id' && field !== 'Name')
-                        .map(field => ({
-                            apiName: field,
-                            label: getFieldLabel(field)
-                        })),
-                    records: value.records.map(rec => ({
-                        name: rec.Name,
-                        recordUrl: '/' + rec.Id,
-                        raw: rec, // Store the full record for logging
-                        fieldValues: value.fields
-                            .filter(field => field !== 'Id' && field !== 'Name')
-                            .map(fieldName => rec[fieldName] || 'N/A')
-                    }))
-                }));
-                this.pages = {};
-                this.relatedData.forEach(obj => {
-                    this.pages[obj.objectName] = 1;
-                });
-                this.error = undefined;
-            })
-            .catch((error) => {
-                this.error = error;
-                this.relatedData = [];
-            });
-    }
+//     fetchRelatedData() {
+//         getRelatedObjectsAndRecords()
+//             .then((data) => {
+//                 this.relatedData = Object.entries(data).map(([objectName, value]) => ({
+//                     objectName: objectName,
+//                     objectLabel: formatLabel(objectName),
+//                     fields: value.fields
+//                         .filter(field => field !== 'Id' && field !== 'Name')
+//                         .map(field => ({
+//                             apiName: field,
+//                             label: getFieldLabel(field)
+//                         })),
+//                     records: value.records.map(rec => ({
+//                         name: rec.Name,
+//                         recordUrl: '/' + rec.Id,
+//                         raw: rec, // Store the full record for logging
+//                         fieldValues: value.fields
+//                             .filter(field => field !== 'Id' && field !== 'Name')
+//                             .map(fieldName => rec[fieldName] || 'N/A')
+//                     }))
+//                 }));
+//                 this.pages = {};
+//                 this.relatedData.forEach(obj => {
+//                     this.pages[obj.objectName] = 1;
+//                 });
+//                 this.error = undefined;
+//             })
+//             .catch((error) => {
+//                 this.error = error;
+//                 this.relatedData = [];
+//             });
+//     }
 
-    get pagedObjects() {
-        return this.relatedData.map(obj => {
-            const page = this.pages[obj.objectName] || 1;
-            const start = (page - 1) * PAGE_SIZE;
-            const totalPages = Math.max(1, Math.ceil(obj.records.length / PAGE_SIZE));
-            return {
-                ...obj,
-                currentPage: page,
-                pageRecords: obj.records.slice(start, start + PAGE_SIZE),
-                totalPages,
-                isPrevDisabled: page === 1,
-                isNextDisabled: page === totalPages,
-                resultStats: {
-                    start: obj.records.length ? start + 1 : 0,
-                    end: Math.min(page * PAGE_SIZE, obj.records.length),
-                    total: obj.records.length
-                }
-            };
-        });
-    }
+//     get pagedObjects() {
+//         return this.relatedData.map(obj => {
+//             const page = this.pages[obj.objectName] || 1;
+//             const start = (page - 1) * PAGE_SIZE;
+//             const totalPages = Math.max(1, Math.ceil(obj.records.length / PAGE_SIZE));
+//             return {
+//                 ...obj,
+//                 currentPage: page,
+//                 pageRecords: obj.records.slice(start, start + PAGE_SIZE),
+//                 totalPages,
+//                 isPrevDisabled: page === 1,
+//                 isNextDisabled: page === totalPages,
+//                 resultStats: {
+//                     start: obj.records.length ? start + 1 : 0,
+//                     end: Math.min(page * PAGE_SIZE, obj.records.length),
+//                     total: obj.records.length
+//                 }
+//             };
+//         });
+//     }
 
-    handlePrevPage(event) {
-        const objectName = event.target.dataset.objectname;
-        const page = this.pages[objectName] || 1;
-        if (page > 1) {
-            this.pages = { ...this.pages, [objectName]: page - 1 };
-        }
-    }
+//     handlePrevPage(event) {
+//         const objectName = event.target.dataset.objectname;
+//         const page = this.pages[objectName] || 1;
+//         if (page > 1) {
+//             this.pages = { ...this.pages, [objectName]: page - 1 };
+//         }
+//     }
 
-    handleNextPage(event) {
-        const objectName = event.target.dataset.objectname;
-        const obj = this.relatedData.find(o => o.objectName === objectName);
-        const totalPages = Math.max(1, Math.ceil(obj.records.length / PAGE_SIZE));
-        const page = this.pages[objectName] || 1;
-        if (page < totalPages) {
-            this.pages = { ...this.pages, [objectName]: page + 1 };
-        }
-    }
+//     handleNextPage(event) {
+//         const objectName = event.target.dataset.objectname;
+//         const obj = this.relatedData.find(o => o.objectName === objectName);
+//         const totalPages = Math.max(1, Math.ceil(obj.records.length / PAGE_SIZE));
+//         const page = this.pages[objectName] || 1;
+//         if (page < totalPages) {
+//             this.pages = { ...this.pages, [objectName]: page + 1 };
+//         }
+//     }
 
-    handlePrintRecord(event) {
-        const recordIndex = event.target.dataset.index;
-        const objectIndex = event.target.dataset.objectindex;
-        const record = this.relatedData[objectIndex].records[recordIndex];
+//     handlePrintRecord(event) {
+//         const recordIndex = event.target.dataset.index;
+//         const objectIndex = event.target.dataset.objectindex;
+//         const record = this.relatedData[objectIndex].records[recordIndex];
 
-        let id = '';
-        if (record.recordUrl) {
-            id = record.recordUrl.replace('/', '');
-        } else if (record.raw && record.raw.Id) {
-            id = record.raw.Id;
-        }
+//         let id = '';
+//         if (record.recordUrl) {
+//             id = record.recordUrl.replace('/', '');
+//         } else if (record.raw && record.raw.Id) {
+//             id = record.raw.Id;
+//         }
 
-        // Fetch both related records and parent records
-        Promise.all([
-            getRelated({ recordId: id }),
-            getRelatedParent({ childRecordId: id })
-        ])
-            .then(([relatedData, parentData]) => {
+//         // Fetch both related records and parent records
+//         Promise.all([
+//             getRelated({ recordId: id }),
+//             getRelatedParent({ childRecordId: id })
+//         ])
+//             .then(([relatedData, parentData]) => {
 
-                // Utility function to process data objects (relatedData or parentData)
-                function processData(data) {
-                    return Object.entries(data).map(([objectName, value]) => ({
-                        objectName: objectName,
-                        objectLabel: formatLabel(objectName),
-                        fields: value.fields
-                            .filter(field => field !== 'Id' && field !== 'Name')
-                            .map(field => ({
-                                apiName: field,
-                                label: formatLabel(field)
-                            })),
-                        records: value.records.map(rec => ({
-                            name: rec.Name,
-                            recordUrl: '/' + rec.Id,
-                            displayFields: value.fields
-                                .filter(field => field !== 'Id' && field !== 'Name')
-                                .map(fieldName => ({
-                                    label: getFieldLabel(fieldName),
-                                    value: rec[fieldName] || 'N/A'
-                                }))
-                        }))
-                    }));
-                }
+//                 // Utility function to process data objects (relatedData or parentData)
+//                 function processData(data) {
+//                     return Object.entries(data).map(([objectName, value]) => ({
+//                         objectName: objectName,
+//                         objectLabel: formatLabel(objectName),
+//                         fields: value.fields
+//                             .filter(field => field !== 'Id' && field !== 'Name')
+//                             .map(field => ({
+//                                 apiName: field,
+//                                 label: formatLabel(field)
+//                             })),
+//                         records: value.records.map(rec => ({
+//                             name: rec.Name,
+//                             recordUrl: '/' + rec.Id,
+//                             displayFields: value.fields
+//                                 .filter(field => field !== 'Id' && field !== 'Name')
+//                                 .map(fieldName => ({
+//                                     label: getFieldLabel(fieldName),
+//                                     value: rec[fieldName] || 'N/A'
+//                                 }))
+//                         }))
+//                     }));
+//                 }
 
-                // Usage:
-                const processedRelatedData = processData(relatedData);
-                const processedParentData = processData(parentData);
-                // Combine related and parent records into a single list
-                this.related = [...processedRelatedData, ...processedParentData];
-                this.error = undefined;
-            })
-            .catch((error) => {
-                this.error = error;
-                this.related = [];
-            });
+//                 // Usage:
+//                 const processedRelatedData = processData(relatedData);
+//                 const processedParentData = processData(parentData);
+//                 // Combine related and parent records into a single list
+//                 this.related = [...processedRelatedData, ...processedParentData];
+//                 this.error = undefined;
+//             })
+//             .catch((error) => {
+//                 this.error = error;
+//                 this.related = [];
+//             });
 
-        this.showmodal = true;
-    }
+//         this.showmodal = true;
+//     }
 
-    handlemodalclose() {
-        this.related = [];
-        this.showmodal = false;
-    }
-}
+//     handlemodalclose() {
+//         this.related = [];
+//         this.showmodal = false;
+//     }
+// }
