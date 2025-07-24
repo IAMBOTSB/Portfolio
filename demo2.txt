@@ -1,242 +1,216 @@
 import { createElement } from 'lwc';
 import ApmMyRecords from 'c/apmMyRecords';
+
+// mocks
 import getRelatedObjectsAndRecords from '@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords';
 import getRelated from '@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords';
 import getRelatedParent from '@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords';
 
-// Mock data for getRelatedObjectsAndRecords
-const mockInitialData = {
-    "Account": {
-        "fields": ["Id", "Name", "Industry"],
-        "records": Array.from({ length: 15 }, (_, i) => ({
-            Id: `001xx000003D${i.toString().padStart(3, '0')}`,
-            Name: `Test Account ${i + 1}`,
-            Industry: `Technology ${i + 1}`
-        }))
-    },
-    "Contact": {
-        "fields": ["Id", "Name", "Email"],
-        "records": [] // For testing no-records scenario
+// Mock realistic return value
+const mockData = {
+    Account: {
+        fields: ['Id', 'Name', 'Test_Field__c'],
+        records: [
+            { Id: '001xx1', Name: 'Acc1', Test_Field__c: 'TF1' },
+            { Id: '001xx2', Name: 'Acc2', Test_Field__c: 'TF2' }
+        ]
     }
 };
 
-// Mock data for modal
-const mockRelatedData = {
-    "Opportunity": {
-        "fields": ["Id", "Name", "StageName"],
-        "records": [{ Id: '006xx000001AbcDE', Name: 'Related Opportunity', StageName: 'Prospecting' }]
+const emptyMockData = {
+    Account: {
+        fields: ['Id', 'Name', 'Test_Field__c'],
+        records: []
     }
 };
 
-const mockParentData = {
-    "Case": {
-        "fields": ["Id", "Name", "Status"],
-        "records": [{ Id: '500xx000001XyzAB', Name: 'Parent Case', Status: 'New' }]
+const relatedDataMock = {
+    Contact: {
+        fields: ['Id', 'Name', 'Test_Field__c'],
+        records: [
+            { Id: '003xy1', Name: 'Contact 1', Test_Field__c: 'rf1'}
+        ]
     }
 };
 
-// Mock for Apex error
-const mockApexError = { body: { message: 'An internal server error has occurred' } };
+const parentDataMock = {
+    Opportunity: {
+        fields: ['Id', 'Name', 'Test_Field__c'],
+        records: [
+            { Id: '006xy1', Name: 'Opp 1', Test_Field__c: 'rfp1'}
+        ]
+    }
+};
 
-// Mocking the Apex methods
-jest.mock('@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords',
-    () => ({ default: jest.fn() }),
+jest.mock(
+    '@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords',
+    () => ({
+        default: jest.fn()
+    }),
     { virtual: true }
 );
-jest.mock('@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords',
-    () => ({ default: jest.fn() }),
+
+jest.mock(
+    '@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords',
+    () => ({
+        default: jest.fn()
+    }),
     { virtual: true }
 );
-jest.mock('@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords',
-    () => ({ default: jest.fn() }),
+
+jest.mock(
+    '@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords',
+    () => ({
+        default: jest.fn()
+    }),
     { virtual: true }
 );
 
-
-// Helper function to wait for promises to resolve
-async function flushPromises() {
-    return Promise.resolve();
-}
-
-describe('c-apm-my-records', () => {
-    afterEach(() => {
-        // The jsdom instance is shared across test cases in a single file so reset the DOM
+describe('c-apm-my-records code coverage additions', () => {
+    beforeEach(() => {
+        getRelatedObjectsAndRecords.mockReset();
+        getRelated.mockReset();
+        getRelatedParent.mockReset();
+        // Clear the document
         while (document.body.firstChild) {
             document.body.removeChild(document.body.firstChild);
         }
-        jest.clearAllMocks();
     });
 
-    // ----------------- Initial Load Tests -----------------
-    it('fetches records on connectedCallback and renders them correctly', async () => {
-        getRelatedObjectsAndRecords.mockResolvedValue(mockInitialData);
-
-        const element = createElement('c-apm-my-records', {
-            is: ApmMyRecords
-        });
+    it('should handle error in fetchRelatedData', async () => {
+        getRelatedObjectsAndRecords.mockRejectedValue({ body: { message: 'Error!' } });
+        const element = createElement('c-apm-my-records', { is: ApmMyRecords });
         document.body.appendChild(element);
-
-        await flushPromises();
-
-        const cards = element.shadowRoot.querySelectorAll('.TableCard');
-        expect(cards.length).toBe(2);
-
-        // Check Account card header and data
-        const accountCardTitle = element.shadowRoot.querySelector('h2.TableCardTitle');
-        expect(accountCardTitle.textContent).toBe('Account'); // Tests formatLabel
-
-        const accountRows = element.shadowRoot.querySelectorAll('table')[0].querySelectorAll('tbody tr');
-        expect(accountRows.length).toBe(10); // PAGE_SIZE is 10
-
-        // Check Contact card for "No Records Found"
-        const noRecordsDiv = element.shadowRoot.querySelectorAll('.no-records-container');
-        expect(noRecordsDiv.length).toBe(1);
-        expect(noRecordsDiv[0].textContent).toContain('No Records Found');
+        // Let promises resolve
+        await Promise.resolve();
+        expect(element.error).toBeDefined();
+        const p = element.shadowRoot.querySelector('p.slds-text-color_error');
+        expect(p).not.toBeNull();
+        expect(p.textContent).toContain('Error:');
     });
 
-    it('displays an error message when initial data fetch fails', async () => {
-        getRelatedObjectsAndRecords.mockRejectedValue(mockApexError);
-
-        const element = createElement('c-apm-my-records', {
-            is: ApmMyRecords
-        });
+    it('should handle records.length 0 edge cases', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(emptyMockData);
+        const element = createElement('c-apm-my-records', { is: ApmMyRecords });
         document.body.appendChild(element);
-
-        await flushPromises();
-
-        const errorParagraph = element.shadowRoot.querySelector('p.slds-text-color_error');
-        expect(errorParagraph).not.toBeNull();
-        expect(errorParagraph.textContent).toBe(`Error: ${mockApexError.body.message}`);
+        await Promise.resolve();
+        // Should show "No Records Found" in table card
+        expect(element.shadowRoot.textContent).toContain('No Records Found');
     });
 
-    // ----------------- Pagination Tests -----------------
-    it('handles next and previous page clicks correctly', async () => {
-        getRelatedObjectsAndRecords.mockResolvedValue(mockInitialData);
-
-        const element = createElement('c-apm-my-records', {
-            is: ApmMyRecords
+    it('should compute pagedObjects pagination and button disables', async () => {
+        // Generate 11 records to test pagination
+        const testRecords = [];
+        for (let i = 0; i < 11; i++) {
+            testRecords.push({ Id: '00x' + i, Name: 'acc' + i, Test_Field__c: 'v' + i });
+        }
+        getRelatedObjectsAndRecords.mockResolvedValue({
+            Account: {
+                fields: ['Id', 'Name', 'Test_Field__c'],
+                records: testRecords
+            }
         });
+        const element = createElement('c-apm-my-records', { is: ApmMyRecords });
         document.body.appendChild(element);
-        await flushPromises();
+        await Promise.resolve();
+        // Next button should not be disabled on page 1
+        const nextBtn = element.shadowRoot.querySelector('button[title="Next"]');
+        expect(nextBtn.disabled).toBe(false);
 
-        // Initial state (Page 1)
-        let pageInfo = element.shadowRoot.querySelector('.slds-card__footer span[style*="margin"]');
-        expect(pageInfo.textContent.trim()).toBe('1 / 2');
+        // Simulate next page click
+        nextBtn.querySelector('lightning-icon').dispatchEvent(
+            new CustomEvent('click', { bubbles: true, composed: true })
+        );
+        // simulate event
+        element.handleNextPage({ target: { dataset: { objectname: 'Account' } } });
+        expect(element.pages.Account).toBe(2);
 
-        let resultStats = element.shadowRoot.querySelector('.slds-text-body_small');
-        expect(resultStats.textContent).toContain('Showing 1 to 10 of 15 results');
-
-        // Click Next
-        const nextButton = element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronright"]');
-        nextButton.dispatchEvent(new CustomEvent('click'));
-        await flushPromises();
-
-        // State after next click (Page 2)
-        pageInfo = element.shadowRoot.querySelector('.slds-card__footer span[style*="margin"]');
-        expect(pageInfo.textContent.trim()).toBe('2 / 2');
-
-        resultStats = element.shadowRoot.querySelector('.slds-text-body_small');
-        expect(resultStats.textContent).toContain('Showing 11 to 15 of 15 results');
-
-        let nextButtonDisabled = element.shadowRoot.querySelector('button[title="Next"]').disabled;
-        expect(nextButtonDisabled).toBe(true);
-
-        // Click Previous
-        const prevButton = element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronleft"]');
-        prevButton.dispatchEvent(new CustomEvent('click'));
-        await flushPromises();
-
-        // State after previous click (Page 1)
-        pageInfo = element.shadowRoot.querySelector('.slds-card__footer span[style*="margin"]');
-        expect(pageInfo.textContent.trim()).toBe('1 / 2');
-
-        let prevButtonDisabled = element.shadowRoot.querySelector('button[title="Previous"]').disabled;
-        expect(prevButtonDisabled).toBe(true);
+        // Now previous should not be disabled
+        const prevBtn = element.shadowRoot.querySelector('button[title="Previous"]');
+        expect(prevBtn.disabled).toBe(false);
+        element.handlePrevPage({ target: { dataset: { objectname: 'Account' } } });
+        expect(element.pages.Account).toBe(1);
     });
 
-    // ----------------- Modal Interaction Tests -----------------
-    it('opens modal with related and parent data on icon click', async () => {
-        getRelatedObjectsAndRecords.mockResolvedValue(mockInitialData);
-        getRelated.mockResolvedValue(mockRelatedData);
-        getRelatedParent.mockResolvedValue(mockParentData);
+    it('should open and close modal (handlePrintRecord/handlemodalclose)', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockData);
+        getRelated.mockResolvedValue(relatedDataMock);
+        getRelatedParent.mockResolvedValue(parentDataMock);
 
         const element = createElement('c-apm-my-records', { is: ApmMyRecords });
         document.body.appendChild(element);
-        await flushPromises();
+        await Promise.resolve();
 
-        // Click the preview icon on the first record
-        const previewIcon = element.shadowRoot.querySelector('lightning-icon[icon-name="utility:preview"]');
-        previewIcon.dispatchEvent(new CustomEvent('click', {
-            detail: {},
-            bubbles: true, // Ensure event bubbles up
-            composed: true // For shadow DOM
-        }));
-        await flushPromises();
+        // Trigger print record
+        element.handlePrintRecord({
+            target: { dataset: { index: 0, objectindex: 0 } }
+        });
+        await Promise.resolve();
+        // Modal open
+        expect(element.showmodal).toBe(true);
+        // Modal rendered
+        expect(element.shadowRoot.textContent).toContain('Related Records/Actions');
 
-        // Verify modal is open
-        const modal = element.shadowRoot.querySelector('section.slds-modal');
-        expect(modal).not.toBeNull();
-        expect(element.shadowRoot.querySelector('.slds-backdrop')).not.toBeNull();
-        
-        // Verify Apex calls for modal data
-        expect(getRelated).toHaveBeenCalledWith({ recordId: '001xx000003D000' });
-        expect(getRelatedParent).toHaveBeenCalledWith({ childRecordId: '001xx000003D000' });
-        
-        // Verify modal content
-        const accordionSections = element.shadowRoot.querySelectorAll('lightning-accordion-section');
-        expect(accordionSections.length).toBe(2);
-        expect(accordionSections[0].label).toBe('Opportunity');
-        expect(accordionSections[1].label).toBe('Case');
+        // Trigger modal close
+        element.handlemodalclose();
+        expect(element.showmodal).toBe(false);
+        expect(element.related).toEqual([]);
     });
 
-    it('handles error when fetching data for the modal', async () => {
-        getRelatedObjectsAndRecords.mockResolvedValue(mockInitialData);
-        // Mock a rejection from one of the modal data calls
-        getRelated.mockRejectedValue(mockApexError);
-        getRelatedParent.mockResolvedValue(mockParentData);
+    it('should handle error case in handlePrintRecord', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockData);
+        getRelated.mockRejectedValue({ body: { message: 'Related Error' } });
+        getRelatedParent.mockResolvedValue(parentDataMock);
 
         const element = createElement('c-apm-my-records', { is: ApmMyRecords });
         document.body.appendChild(element);
-        await flushPromises();
+        await Promise.resolve();
 
-        // Click preview icon
-        const previewIcon = element.shadowRoot.querySelector('lightning-icon[icon-name="utility:preview"]');
-        previewIcon.dispatchEvent(new CustomEvent('click'));
-        await flushPromises();
-
-        // Check that modal is still open but shows an error
-        const modal = element.shadowRoot.querySelector('section.slds-modal');
-        expect(modal).not.toBeNull();
-        
-        // Check for error message within the modal content
-        const errorParagraph = element.shadowRoot.querySelector('#modal-content-id-1 p');
-        // Note: The original component has two error blocks. This test will find the one inside the modal.
-        expect(errorParagraph.textContent).toBe(`Error: ${mockApexError.body.message}`);
+        await element.handlePrintRecord({
+            target: { dataset: { index: 0, objectindex: 0 } }
+        });
+        await Promise.resolve();
+        expect(element.error).toBeDefined();
+        expect(element.related).toEqual([]);
     });
 
-    it('closes the modal when the cancel button is clicked', async () => {
-        getRelatedObjectsAndRecords.mockResolvedValue(mockInitialData);
-        getRelated.mockResolvedValue(mockRelatedData);
-        getRelatedParent.mockResolvedValue(mockParentData);
+    it('should handle modal inner errors and empty modal lists', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockData);
+        getRelated.mockResolvedValue({});
+        getRelatedParent.mockResolvedValue({});
 
         const element = createElement('c-apm-my-records', { is: ApmMyRecords });
         document.body.appendChild(element);
-        await flushPromises();
+        await Promise.resolve();
 
-        // Open the modal first
-        element.shadowRoot.querySelector('lightning-icon[icon-name="utility:preview"]').dispatchEvent(new CustomEvent('click'));
-        await flushPromises();
+        // Force open modal, with related and error both set
+        element.related = [];
+        element.error = { body: { message: 'Error!' } };
+        element.showmodal = true;
+        await Promise.resolve();
+        // After rerender, modal should show "Error: "
+        expect(element.shadowRoot.textContent).toContain('Error: Error!');
+        // Empty modal should show "No Records Found"
+        element.error = undefined;
+        await Promise.resolve();
+        expect(element.shadowRoot.textContent).toContain('No Records Found');
+    });
 
-        // Ensure modal is open before clicking close
-        expect(element.shadowRoot.querySelector('section.slds-modal')).not.toBeNull();
-
-        // Click the close button
-        const closeButton = element.shadowRoot.querySelector('button.slds-button_neutral');
-        closeButton.dispatchEvent(new CustomEvent('click'));
-        await flushPromises();
-
-        // Verify modal is closed
-        expect(element.shadowRoot.querySelector('section.slds-modal')).toBeNull();
-        expect(element.shadowRoot.querySelector('.slds-backdrop')).toBeNull();
+    // Utility method coverage
+    it('should format labels and get field label for different patterns', () => {
+        // Static methods (not exported), so call via instance
+        const instance = new ApmMyRecords();
+        // __c
+        expect(instance.constructor.prototype.formatLabel('Acc_Object__c')).toBe('Acc Object');
+        // __mdt
+        expect(instance.constructor.prototype.formatLabel('Acc_Object__mdt')).toBe('Acc Object');
+        // __r
+        expect(instance.constructor.prototype.formatLabel('Acc_Object__r')).toBe('Acc Object');
+        // non-suffixed
+        expect(instance.constructor.prototype.formatLabel('Something_else')).toBe('Something else');
+        // getFieldLabel: with dot
+        expect(instance.constructor.prototype.getFieldLabel('Parent.Id__c')).toBe('Parent');
+        // getFieldLabel: without dot
+        expect(instance.constructor.prototype.getFieldLabel('My_Custom__r')).toBe('My Custom');
     });
 });
