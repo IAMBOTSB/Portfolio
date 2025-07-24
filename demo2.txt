@@ -1,83 +1,282 @@
-it('handles next page logic correctly', async () => {
-    getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedObjectsAndRecords);
+import { createElement } from 'lwc';
+import ApmMyRecords from 'c/apmMyRecords'; // Note: component name might be c/aPM_MyRecords, adjust if needed
+import getRelatedObjectsAndRecords from '@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords';
+import getRelated from '@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords';
+import getRelatedParent from '@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords';
 
-    const element = createElement('c-a-p-m-my-records', {
-        is: ApmMyRecords
-    });
-    document.body.appendChild(element);
+// Mock JSON data - USES YOUR EXISTING FILES
+const mockRelatedObjectsAndRecords = require('./data/relatedObjectsAndRecords.json');
+const mockRelated = require('./data/relatedRecords.json');
+const mockParent = require('./data/parentRecords.json');
 
-    await flushPromises();
+// Mock Apex - UNCHANGED
+jest.mock('@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords', () => ({
+    default: jest.fn()
+}), { virtual: true });
 
-    // Simulate two next clicks
-    const nextIcons = element.shadowRoot.querySelectorAll('lightning-icon[icon-name="utility:chevronright"]');
-    expect(nextIcons.length).toBeGreaterThan(0);
+jest.mock('@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords', () => ({
+    default: jest.fn()
+}), { virtual: true });
 
-    nextIcons.forEach(icon => {
-        icon.dispatchEvent(new CustomEvent('click', {
-            bubbles: true,
-            composed: true
-        }));
-    });
+jest.mock('@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords', () => ({
+    default: jest.fn()
+}), { virtual: true });
 
-    await flushPromises();
-});
 
-it('handles previous page logic correctly', async () => {
-    getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedObjectsAndRecords);
-
-    const element = createElement('c-a-p-m-my-records', {
-        is: ApmMyRecords
-    });
-    document.body.appendChild(element);
-
-    await flushPromises();
-
-    // Manually simulate next and then previous
-    const nextIcons = element.shadowRoot.querySelectorAll('lightning-icon[icon-name="utility:chevronright"]');
-    const prevIcons = element.shadowRoot.querySelectorAll('lightning-icon[icon-name="utility:chevronleft"]');
-
-    expect(nextIcons.length).toBeGreaterThan(0);
-    expect(prevIcons.length).toBeGreaterThan(0);
-
-    nextIcons.forEach(icon => {
-        icon.dispatchEvent(new CustomEvent('click', {
-            bubbles: true,
-            composed: true
-        }));
+describe('c-a-p-m-my-records', () => {
+    afterEach(() => {
+        while (document.body.firstChild) {
+            document.body.removeChild(document.body.firstChild);
+        }
+        jest.clearAllMocks();
     });
 
-    await flushPromises();
+    async function flushPromises() {
+        return Promise.resolve();
+    }
 
-    prevIcons.forEach(icon => {
-        icon.dispatchEvent(new CustomEvent('click', {
-            bubbles: true,
-            composed: true
-        }));
+    // =================================================================
+    // YOUR EXISTING TESTS (UNCHANGED)
+    // =================================================================
+    it('renders tables for relatedData', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedObjectsAndRecords);
+
+        const element = createElement('c-a-p-m-my-records', {
+            is: ApmMyRecords
+        });
+        document.body.appendChild(element);
+
+        await flushPromises();
+
+        // Should render two tables (Account and Contact)
+        const tables = element.shadowRoot.querySelectorAll('table.slds-table');
+        expect(tables.length).toBe(2);
+
+        // Should render record links
+        const recordLinks = element.shadowRoot.querySelectorAll('a.slds-text-link');
+        expect(recordLinks.length).toBe(3);
     });
 
-    await flushPromises();
-});
+    it('renders "No Records Found" when no records', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue({
+            EmptyObj: {
+                fields: ['Id', 'Name', 'Custom_Field__c'],
+                records: []
+            }
+        });
 
-it('disables next and prev icons appropriately at boundaries', async () => {
-    getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedObjectsAndRecords);
+        const element = createElement('c-a-p-m-my-records', {
+            is: ApmMyRecords
+        });
+        document.body.appendChild(element);
 
-    const element = createElement('c-a-p-m-my-records', {
-        is: ApmMyRecords
+        await flushPromises();
+
+        const noRecords = element.shadowRoot.querySelector('.no-records-container h3');
+        expect(noRecords).not.toBeNull();
+        expect(noRecords.textContent).toBe('No Records Found');
     });
-    document.body.appendChild(element);
 
-    await flushPromises();
+    it('shows error message when Apex fails', async () => {
+        getRelatedObjectsAndRecords.mockRejectedValue({ body: { message: 'Test error' } });
 
-    const pagedObj = element.pagedObjects.find(obj => obj.objectName === 'Account');
+        const element = createElement('c-a-p-m-my-records', {
+            is: ApmMyRecords
+        });
+        document.body.appendChild(element);
 
-    // Should be first page initially
-    expect(pagedObj.isPrevDisabled).toBe(true);
-    expect(pagedObj.isNextDisabled).toBe(false);
+        await flushPromises();
 
-    // Manually move to last page
-    element.pages.Account = pagedObj.totalPages;
+        const errorMsg = element.shadowRoot.querySelector('.slds-text-color_error');
+        expect(errorMsg).not.toBeNull();
+        expect(errorMsg.textContent).toContain('Test error');
+    });
 
-    const updatedObj = element.pagedObjects.find(obj => obj.objectName === 'Account');
-    expect(updatedObj.isNextDisabled).toBe(true);
-    expect(updatedObj.isPrevDisabled).toBe(false);
+    it('opens modal and loads related/parent records on icon click', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedObjectsAndRecords);
+        getRelated.mockResolvedValue(mockRelated);
+        getRelatedParent.mockResolvedValue(mockParent);
+
+        const element = createElement('c-a-p-m-my-records', {
+            is: ApmMyRecords
+        });
+        document.body.appendChild(element);
+
+        await flushPromises();
+
+        // Simulate click on lightning-icon for first Account record
+        const icon = element.shadowRoot.querySelector('lightning-icon[data-index="0"][data-objectindex="0"]');
+        expect(icon).not.toBeNull();
+        icon.click();
+
+        await flushPromises();
+        await flushPromises();
+
+        // Modal should now be open
+        expect(element.shadowRoot.querySelector('.slds-modal.slds-fade-in-open')).not.toBeNull();
+
+        // Should display related/parent records in accordion
+        const accordionSections = element.shadowRoot.querySelectorAll('lightning-accordion-section');
+        expect(accordionSections.length).toBeGreaterThan(0);
+    });
+
+    it('shows "No Records Found" in modal accordion if no related records', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedObjectsAndRecords);
+        getRelated.mockResolvedValue({});
+        getRelatedParent.mockResolvedValue({});
+
+        const element = createElement('c-a-p-m-my-records', {
+            is: ApmMyRecords
+        });
+        document.body.appendChild(element);
+
+        await flushPromises();
+
+        // Click icon to open modal
+        const icon = element.shadowRoot.querySelector('lightning-icon[data-index="0"][data-objectindex="0"]');
+        icon.click();
+
+        await flushPromises();
+        await flushPromises();
+
+        // Should show "No Records Found" in modal
+        const modalNoRecords = [...element.shadowRoot.querySelectorAll('p')]
+            .find(p => p.textContent.includes('No Records Found'));
+        expect(modalNoRecords).not.toBeNull();
+        expect(modalNoRecords.textContent).toContain('No Records Found');
+    });
+
+    it('handles modal close', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedObjectsAndRecords);
+        getRelated.mockResolvedValue(mockRelated);
+        getRelatedParent.mockResolvedValue(mockParent);
+
+        const element = createElement('c-a-p-m-my-records', {
+            is: ApmMyRecords
+        });
+        document.body.appendChild(element);
+
+        await flushPromises();
+
+        // Open modal
+        const icon = element.shadowRoot.querySelector('lightning-icon[data-index="0"][data-objectindex="0"]');
+        icon.click();
+
+        await flushPromises();
+        await flushPromises();
+
+        // Click Cancel button to close modal
+        const cancelBtn = element.shadowRoot.querySelector('button[aria-label="Cancel and close"]');
+        cancelBtn.click();
+
+        await flushPromises();
+
+        // Modal should close
+        expect(element.shadowRoot.querySelector('.slds-modal.slds-fade-in-open')).toBeNull();
+    });
+
+    // =================================================================
+    // NEW PAGINATION TESTS TO INCREASE COVERAGE
+    // =================================================================
+    describe('pagination logic', () => {
+        // A dedicated mock with > 10 records to test pagination reliably.
+        const PAGINATION_MOCK_DATA = {
+            Account: {
+                fields: ['Id', 'Name', 'Industry'],
+                records: [
+                    { Id: '001', Name: 'Rec 1', Industry: 'A' }, { Id: '002', Name: 'Rec 2', Industry: 'A' },
+                    { Id: '003', Name: 'Rec 3', Industry: 'A' }, { Id: '004', Name: 'Rec 4', Industry: 'A' },
+                    { Id: '005', Name: 'Rec 5', Industry: 'A' }, { Id: '006', Name: 'Rec 6', Industry: 'A' },
+                    { Id: '007', Name: 'Rec 7', Industry: 'A' }, { Id: '008', Name: 'Rec 8', Industry: 'A' },
+                    { Id: '009', Name: 'Rec 9', Industry: 'A' }, { Id: '010', Name: 'Rec 10', Industry: 'A' },
+                    { Id: '011', Name: 'Rec 11', Industry: 'B' }, { Id: '012', Name: 'Rec 12', Industry: 'B' }
+                ]
+            }
+        };
+
+        // A dedicated mock with < 10 records.
+        const SINGLE_PAGE_MOCK_DATA = {
+            Contact: {
+                fields: ['Id', 'Name'],
+                records: [{ Id: '101', Name: 'Single Contact' }]
+            }
+        };
+
+        it('should initialize on page 1 with prev disabled and next enabled', async () => {
+            getRelatedObjectsAndRecords.mockResolvedValue(PAGINATION_MOCK_DATA);
+            const element = createElement('c-a-p-m-my-records', { is: ApmMyRecords });
+            document.body.appendChild(element);
+            await flushPromises();
+
+            const prevButton = element.shadowRoot.querySelector('button[title="Previous"]');
+            const nextButton = element.shadowRoot.querySelector('button[title="Next"]');
+
+            expect(prevButton.disabled).toBe(true);
+            expect(nextButton.disabled).toBe(false);
+
+            const pageIndicator = element.shadowRoot.querySelector('.slds-button-group span');
+            expect(pageIndicator.textContent.trim()).toBe('1 / 2');
+        });
+
+        it('should navigate to page 2 and disable next button', async () => {
+            getRelatedObjectsAndRecords.mockResolvedValue(PAGINATION_MOCK_DATA);
+            const element = createElement('c-a-p-m-my-records', { is: ApmMyRecords });
+            document.body.appendChild(element);
+            await flushPromises();
+
+            // Click the next icon
+            element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronright"]').click();
+            await flushPromises();
+
+            const prevButton = element.shadowRoot.querySelector('button[title="Previous"]');
+            const nextButton = element.shadowRoot.querySelector('button[title="Next"]');
+
+            expect(prevButton.disabled).toBe(false);
+            expect(nextButton.disabled).toBe(true);
+
+            const pageIndicator = element.shadowRoot.querySelector('.slds-button-group span');
+            expect(pageIndicator.textContent.trim()).toBe('2 / 2');
+
+            // Verify records shown are for page 2
+            const recordLinks = element.shadowRoot.querySelectorAll('a.slds-text-link');
+            expect(recordLinks.length).toBe(2); // Records 11 and 12
+            expect(recordLinks[0].textContent).toBe('Rec 11');
+        });
+        
+        it('should navigate back to page 1 from page 2', async () => {
+            getRelatedObjectsAndRecords.mockResolvedValue(PAGINATION_MOCK_DATA);
+            const element = createElement('c-a-p-m-my-records', { is: ApmMyRecords });
+            document.body.appendChild(element);
+            
+            // Manually set component to be on page 2
+            element.pages = { Account: 2 };
+            await flushPromises();
+
+            // Verify we are on page 2
+            let pageIndicator = element.shadowRoot.querySelector('.slds-button-group span');
+            expect(pageIndicator.textContent.trim()).toBe('2 / 2');
+
+            // Click the previous icon
+            element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronleft"]').click();
+            await flushPromises();
+
+            // Verify we are back on page 1
+            pageIndicator = element.shadowRoot.querySelector('.slds-button-group span');
+            expect(pageIndicator.textContent.trim()).toBe('1 / 2');
+            expect(element.shadowRoot.querySelector('button[title="Previous"]').disabled).toBe(true);
+        });
+
+        it('should disable both buttons when there is only one page', async () => {
+            getRelatedObjectsAndRecords.mockResolvedValue(SINGLE_PAGE_MOCK_DATA);
+            const element = createElement('c-a-p-m-my-records', { is: ApmMyRecords });
+            document.body.appendChild(element);
+            await flushPromises();
+
+            const prevButton = element.shadowRoot.querySelector('button[title="Previous"]');
+            const nextButton = element.shadowRoot.querySelector('button[title="Next"]');
+
+            expect(prevButton.disabled).toBe(true);
+            expect(nextButton.disabled).toBe(true);
+        });
+    });
 });
