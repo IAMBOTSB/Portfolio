@@ -1,5 +1,5 @@
 import { createElement } from 'lwc';
-import ApmMyRecords from 'c/apmMyRecords'; // Note: component name might be c/aPM_MyRecords, adjust if needed
+import ApmMyRecords from 'c/apmMyRecords'; // Adjusted to match JS class name. Change to 'c/aPM_MyRecords' if that is your exact component name.
 import getRelatedObjectsAndRecords from '@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords';
 import getRelated from '@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords';
 import getRelatedParent from '@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords';
@@ -8,6 +8,10 @@ import getRelatedParent from '@salesforce/apex/APM_apLWC_MyRecordsController.get
 const mockRelatedObjectsAndRecords = require('./data/relatedObjectsAndRecords.json');
 const mockRelated = require('./data/relatedRecords.json');
 const mockParent = require('./data/parentRecords.json');
+
+// NEW MOCK DATA FILE FOR PAGINATION - REQUIRES THE FILE FROM STEP 1
+const mockPaginationData = require('./data/relatedObjectsAndRecordsWithPagination.json');
+
 
 // Mock Apex - UNCHANGED
 jest.mock('@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords', () => ({
@@ -32,7 +36,8 @@ describe('c-a-p-m-my-records', () => {
     });
 
     async function flushPromises() {
-        return Promise.resolve();
+        // This is a microtask-based flush, which is standard for LWC Jest tests.
+        return new Promise(resolve => setImmediate(resolve));
     }
 
     // =================================================================
@@ -109,6 +114,7 @@ describe('c-a-p-m-my-records', () => {
         expect(icon).not.toBeNull();
         icon.click();
 
+        // Wait for both Apex calls in Promise.all to resolve
         await flushPromises();
         await flushPromises();
 
@@ -132,14 +138,12 @@ describe('c-a-p-m-my-records', () => {
 
         await flushPromises();
 
-        // Click icon to open modal
         const icon = element.shadowRoot.querySelector('lightning-icon[data-index="0"][data-objectindex="0"]');
         icon.click();
 
         await flushPromises();
         await flushPromises();
-
-        // Should show "No Records Found" in modal
+        
         const modalNoRecords = [...element.shadowRoot.querySelectorAll('p')]
             .find(p => p.textContent.includes('No Records Found'));
         expect(modalNoRecords).not.toBeNull();
@@ -158,125 +162,106 @@ describe('c-a-p-m-my-records', () => {
 
         await flushPromises();
 
-        // Open modal
         const icon = element.shadowRoot.querySelector('lightning-icon[data-index="0"][data-objectindex="0"]');
         icon.click();
 
         await flushPromises();
         await flushPromises();
 
-        // Click Cancel button to close modal
         const cancelBtn = element.shadowRoot.querySelector('button[aria-label="Cancel and close"]');
         cancelBtn.click();
 
         await flushPromises();
-
-        // Modal should close
+        
         expect(element.shadowRoot.querySelector('.slds-modal.slds-fade-in-open')).toBeNull();
     });
+
 
     // =================================================================
     // NEW PAGINATION TESTS TO INCREASE COVERAGE
     // =================================================================
-    describe('pagination logic', () => {
-        // A dedicated mock with > 10 records to test pagination reliably.
-        const PAGINATION_MOCK_DATA = {
-            Account: {
-                fields: ['Id', 'Name', 'Industry'],
-                records: [
-                    { Id: '001', Name: 'Rec 1', Industry: 'A' }, { Id: '002', Name: 'Rec 2', Industry: 'A' },
-                    { Id: '003', Name: 'Rec 3', Industry: 'A' }, { Id: '004', Name: 'Rec 4', Industry: 'A' },
-                    { Id: '005', Name: 'Rec 5', Industry: 'A' }, { Id: '006', Name: 'Rec 6', Industry: 'A' },
-                    { Id: '007', Name: 'Rec 7', Industry: 'A' }, { Id: '008', Name: 'Rec 8', Industry: 'A' },
-                    { Id: '009', Name: 'Rec 9', Industry: 'A' }, { Id: '010', Name: 'Rec 10', Industry: 'A' },
-                    { Id: '011', Name: 'Rec 11', Industry: 'B' }, { Id: '012', Name: 'Rec 12', Industry: 'B' }
-                ]
-            }
-        };
 
-        // A dedicated mock with < 10 records.
-        const SINGLE_PAGE_MOCK_DATA = {
-            Contact: {
-                fields: ['Id', 'Name'],
-                records: [{ Id: '101', Name: 'Single Contact' }]
-            }
-        };
+    it('PAGINATION: initial state has prev disabled and next enabled for multi-page data', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockPaginationData);
+        const element = createElement('c-a-p-m-my-records', { is: ApmMyRecords });
+        document.body.appendChild(element);
+        await flushPromises();
 
-        it('should initialize on page 1 with prev disabled and next enabled', async () => {
-            getRelatedObjectsAndRecords.mockResolvedValue(PAGINATION_MOCK_DATA);
-            const element = createElement('c-a-p-m-my-records', { is: ApmMyRecords });
-            document.body.appendChild(element);
-            await flushPromises();
-
-            const prevButton = element.shadowRoot.querySelector('button[title="Previous"]');
-            const nextButton = element.shadowRoot.querySelector('button[title="Next"]');
-
-            expect(prevButton.disabled).toBe(true);
-            expect(nextButton.disabled).toBe(false);
-
-            const pageIndicator = element.shadowRoot.querySelector('.slds-button-group span');
-            expect(pageIndicator.textContent.trim()).toBe('1 / 2');
-        });
-
-        it('should navigate to page 2 and disable next button', async () => {
-            getRelatedObjectsAndRecords.mockResolvedValue(PAGINATION_MOCK_DATA);
-            const element = createElement('c-a-p-m-my-records', { is: ApmMyRecords });
-            document.body.appendChild(element);
-            await flushPromises();
-
-            // Click the next icon
-            element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronright"]').click();
-            await flushPromises();
-
-            const prevButton = element.shadowRoot.querySelector('button[title="Previous"]');
-            const nextButton = element.shadowRoot.querySelector('button[title="Next"]');
-
-            expect(prevButton.disabled).toBe(false);
-            expect(nextButton.disabled).toBe(true);
-
-            const pageIndicator = element.shadowRoot.querySelector('.slds-button-group span');
-            expect(pageIndicator.textContent.trim()).toBe('2 / 2');
-
-            // Verify records shown are for page 2
-            const recordLinks = element.shadowRoot.querySelectorAll('a.slds-text-link');
-            expect(recordLinks.length).toBe(2); // Records 11 and 12
-            expect(recordLinks[0].textContent).toBe('Rec 11');
-        });
+        const prevButton = element.shadowRoot.querySelector('button[title="Previous"]');
+        const nextButton = element.shadowRoot.querySelector('button[title="Next"]');
         
-        it('should navigate back to page 1 from page 2', async () => {
-            getRelatedObjectsAndRecords.mockResolvedValue(PAGINATION_MOCK_DATA);
-            const element = createElement('c-a-p-m-my-records', { is: ApmMyRecords });
-            document.body.appendChild(element);
-            
-            // Manually set component to be on page 2
-            element.pages = { Account: 2 };
-            await flushPromises();
+        expect(prevButton.disabled).toBe(true);
+        expect(nextButton.disabled).toBe(false);
 
-            // Verify we are on page 2
-            let pageIndicator = element.shadowRoot.querySelector('.slds-button-group span');
-            expect(pageIndicator.textContent.trim()).toBe('2 / 2');
+        const pageIndicator = element.shadowRoot.querySelector('.slds-button-group span');
+        expect(pageIndicator.textContent.trim()).toBe('1 / 2');
+    });
 
-            // Click the previous icon
-            element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronleft"]').click();
-            await flushPromises();
+    it('PAGINATION: navigates to the next page and updates buttons and records', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockPaginationData);
+        const element = createElement('c-a-p-m-my-records', { is: ApmMyRecords });
+        document.body.appendChild(element);
+        await flushPromises();
 
-            // Verify we are back on page 1
-            pageIndicator = element.shadowRoot.querySelector('.slds-button-group span');
-            expect(pageIndicator.textContent.trim()).toBe('1 / 2');
-            expect(element.shadowRoot.querySelector('button[title="Previous"]').disabled).toBe(true);
-        });
+        // Click the next icon
+        element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronright"]').click();
+        await flushPromises();
 
-        it('should disable both buttons when there is only one page', async () => {
-            getRelatedObjectsAndRecords.mockResolvedValue(SINGLE_PAGE_MOCK_DATA);
-            const element = createElement('c-a-p-m-my-records', { is: ApmMyRecords });
-            document.body.appendChild(element);
-            await flushPromises();
+        // Now on page 2
+        const prevButton = element.shadowRoot.querySelector('button[title="Previous"]');
+        const nextButton = element.shadowRoot.querySelector('button[title="Next"]');
+        
+        expect(prevButton.disabled).toBe(false);
+        expect(nextButton.disabled).toBe(true); // This is the last page
 
-            const prevButton = element.shadowRoot.querySelector('button[title="Previous"]');
-            const nextButton = element.shadowRoot.querySelector('button[title="Next"]');
+        const pageIndicator = element.shadowRoot.querySelector('.slds-button-group span');
+        expect(pageIndicator.textContent.trim()).toBe('2 / 2');
 
-            expect(prevButton.disabled).toBe(true);
-            expect(nextButton.disabled).toBe(true);
-        });
+        // Verify records shown are for page 2 (should be 2 records)
+        const recordLinks = element.shadowRoot.querySelectorAll('a.slds-text-link');
+        expect(recordLinks.length).toBe(2);
+        expect(recordLinks[0].textContent).toBe('Pagination Account 11');
+    });
+
+    it('PAGINATION: navigates to next page and then back to previous page', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockPaginationData);
+        const element = createElement('c-a-p-m-my-records', { is: ApmMyRecords });
+        document.body.appendChild(element);
+        await flushPromises();
+
+        // Go to page 2
+        element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronright"]').click();
+        await flushPromises();
+
+        // Go back to page 1
+        element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronleft"]').click();
+        await flushPromises();
+
+        // Check if we are back on page 1
+        const prevButton = element.shadowRoot.querySelector('button[title="Previous"]');
+        expect(prevButton.disabled).toBe(true);
+
+        const pageIndicator = element.shadowRoot.querySelector('.slds-button-group span');
+        expect(pageIndicator.textContent.trim()).toBe('1 / 2');
+
+        const recordLinks = element.shadowRoot.querySelectorAll('a.slds-text-link');
+        expect(recordLinks.length).toBe(10); // Page 1 has 10 records
+    });
+
+    it('PAGINATION: disables both buttons when there is only one page of data', async () => {
+        // Use the original mock data which has less than 10 records per object
+        getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedObjectsAndRecords);
+        const element = createElement('c-a-p-m-my-records', { is: ApmMyRecords });
+        document.body.appendChild(element);
+        await flushPromises();
+
+        const prevButton = element.shadowRoot.querySelector('button[title="Previous"]');
+        const nextButton = element.shadowRoot.querySelector('button[title="Next"]');
+
+        expect(prevButton.disabled).toBe(true);
+        expect(nextButton.disabled).toBe(true);
+
+        const pageIndicator = element.shadowRoot.querySelector('.slds-button-group span');
+        expect(pageIndicator.textContent.trim()).toBe('1 / 1');
     });
 });
