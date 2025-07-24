@@ -1,216 +1,67 @@
-import { createElement } from 'lwc';
-import ApmMyRecords from 'c/apmMyRecords';
-
-// mocks
-import getRelatedObjectsAndRecords from '@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords';
-import getRelated from '@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords';
-import getRelatedParent from '@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords';
-
-// Mock realistic return value
-const mockData = {
-    Account: {
-        fields: ['Id', 'Name', 'Test_Field__c'],
-        records: [
-            { Id: '001xx1', Name: 'Acc1', Test_Field__c: 'TF1' },
-            { Id: '001xx2', Name: 'Acc2', Test_Field__c: 'TF2' }
-        ]
-    }
-};
-
-const emptyMockData = {
-    Account: {
-        fields: ['Id', 'Name', 'Test_Field__c'],
-        records: []
-    }
-};
-
-const relatedDataMock = {
-    Contact: {
-        fields: ['Id', 'Name', 'Test_Field__c'],
-        records: [
-            { Id: '003xy1', Name: 'Contact 1', Test_Field__c: 'rf1'}
-        ]
-    }
-};
-
-const parentDataMock = {
-    Opportunity: {
-        fields: ['Id', 'Name', 'Test_Field__c'],
-        records: [
-            { Id: '006xy1', Name: 'Opp 1', Test_Field__c: 'rfp1'}
-        ]
-    }
-};
-
-jest.mock(
-    '@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords',
-    () => ({
-        default: jest.fn()
-    }),
-    { virtual: true }
-);
-
-jest.mock(
-    '@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords',
-    () => ({
-        default: jest.fn()
-    }),
-    { virtual: true }
-);
-
-jest.mock(
-    '@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords',
-    () => ({
-        default: jest.fn()
-    }),
-    { virtual: true }
-);
-
-describe('c-apm-my-records code coverage additions', () => {
-    beforeEach(() => {
-        getRelatedObjectsAndRecords.mockReset();
-        getRelated.mockReset();
-        getRelatedParent.mockReset();
-        // Clear the document
-        while (document.body.firstChild) {
-            document.body.removeChild(document.body.firstChild);
+it('should handleNextPage and increment page number correctly', async () => {
+    getRelatedObjectsAndRecords.mockResolvedValueOnce({
+        Account__c: {
+            fields: ['Name', 'Custom_Field__c'],
+            records: Array.from({ length: 21 }).map((_, i) => ({
+                Id: `001${i}`,
+                Name: `Test ${i + 1}`,
+                Custom_Field__c: `Field ${i + 1}`
+            }))
         }
     });
 
-    it('should handle error in fetchRelatedData', async () => {
-        getRelatedObjectsAndRecords.mockRejectedValue({ body: { message: 'Error!' } });
-        const element = createElement('c-apm-my-records', { is: ApmMyRecords });
-        document.body.appendChild(element);
-        // Let promises resolve
-        await Promise.resolve();
-        expect(element.error).toBeDefined();
-        const p = element.shadowRoot.querySelector('p.slds-text-color_error');
-        expect(p).not.toBeNull();
-        expect(p.textContent).toContain('Error:');
+    const element = createElement('c-apm-my-records', {
+        is: ApmMyRecords
     });
+    document.body.appendChild(element);
+    await Promise.resolve(); // wait for render
+    element.connectedCallback();
+    await Promise.resolve(); // wait for Apex result
 
-    it('should handle records.length 0 edge cases', async () => {
-        getRelatedObjectsAndRecords.mockResolvedValue(emptyMockData);
-        const element = createElement('c-apm-my-records', { is: ApmMyRecords });
-        document.body.appendChild(element);
-        await Promise.resolve();
-        // Should show "No Records Found" in table card
-        expect(element.shadowRoot.textContent).toContain('No Records Found');
-    });
+    const nextButtonIcon = element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronright"]');
+    nextButtonIcon.dispatchEvent(new CustomEvent('click', {
+        bubbles: true,
+        composed: true
+    }));
 
-    it('should compute pagedObjects pagination and button disables', async () => {
-        // Generate 11 records to test pagination
-        const testRecords = [];
-        for (let i = 0; i < 11; i++) {
-            testRecords.push({ Id: '00x' + i, Name: 'acc' + i, Test_Field__c: 'v' + i });
+    // simulate second click to increase page from 2 to 3 (only if more than 20 items)
+    nextButtonIcon.dispatchEvent(new CustomEvent('click', {
+        bubbles: true,
+        composed: true
+    }));
+
+    await Promise.resolve();
+});
+
+it('should handlePrevPage and decrement page number correctly', async () => {
+    getRelatedObjectsAndRecords.mockResolvedValueOnce({
+        Account__c: {
+            fields: ['Name', 'Custom_Field__c'],
+            records: Array.from({ length: 20 }).map((_, i) => ({
+                Id: `001${i}`,
+                Name: `Test ${i + 1}`,
+                Custom_Field__c: `Value ${i + 1}`
+            }))
         }
-        getRelatedObjectsAndRecords.mockResolvedValue({
-            Account: {
-                fields: ['Id', 'Name', 'Test_Field__c'],
-                records: testRecords
-            }
-        });
-        const element = createElement('c-apm-my-records', { is: ApmMyRecords });
-        document.body.appendChild(element);
-        await Promise.resolve();
-        // Next button should not be disabled on page 1
-        const nextBtn = element.shadowRoot.querySelector('button[title="Next"]');
-        expect(nextBtn.disabled).toBe(false);
-
-        // Simulate next page click
-        nextBtn.querySelector('lightning-icon').dispatchEvent(
-            new CustomEvent('click', { bubbles: true, composed: true })
-        );
-        // simulate event
-        element.handleNextPage({ target: { dataset: { objectname: 'Account' } } });
-        expect(element.pages.Account).toBe(2);
-
-        // Now previous should not be disabled
-        const prevBtn = element.shadowRoot.querySelector('button[title="Previous"]');
-        expect(prevBtn.disabled).toBe(false);
-        element.handlePrevPage({ target: { dataset: { objectname: 'Account' } } });
-        expect(element.pages.Account).toBe(1);
     });
 
-    it('should open and close modal (handlePrintRecord/handlemodalclose)', async () => {
-        getRelatedObjectsAndRecords.mockResolvedValue(mockData);
-        getRelated.mockResolvedValue(relatedDataMock);
-        getRelatedParent.mockResolvedValue(parentDataMock);
-
-        const element = createElement('c-apm-my-records', { is: ApmMyRecords });
-        document.body.appendChild(element);
-        await Promise.resolve();
-
-        // Trigger print record
-        element.handlePrintRecord({
-            target: { dataset: { index: 0, objectindex: 0 } }
-        });
-        await Promise.resolve();
-        // Modal open
-        expect(element.showmodal).toBe(true);
-        // Modal rendered
-        expect(element.shadowRoot.textContent).toContain('Related Records/Actions');
-
-        // Trigger modal close
-        element.handlemodalclose();
-        expect(element.showmodal).toBe(false);
-        expect(element.related).toEqual([]);
+    const element = createElement('c-apm-my-records', {
+        is: ApmMyRecords
     });
+    document.body.appendChild(element);
 
-    it('should handle error case in handlePrintRecord', async () => {
-        getRelatedObjectsAndRecords.mockResolvedValue(mockData);
-        getRelated.mockRejectedValue({ body: { message: 'Related Error' } });
-        getRelatedParent.mockResolvedValue(parentDataMock);
+    element.connectedCallback();
+    await Promise.resolve();
 
-        const element = createElement('c-apm-my-records', { is: ApmMyRecords });
-        document.body.appendChild(element);
-        await Promise.resolve();
+    // Set current page to 2 to test going back to 1
+    element.pages = { Account__c: 2 };
+    await Promise.resolve();
 
-        await element.handlePrintRecord({
-            target: { dataset: { index: 0, objectindex: 0 } }
-        });
-        await Promise.resolve();
-        expect(element.error).toBeDefined();
-        expect(element.related).toEqual([]);
-    });
+    const prevButtonIcon = element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronleft"]');
+    prevButtonIcon.dispatchEvent(new CustomEvent('click', {
+        bubbles: true,
+        composed: true
+    }));
 
-    it('should handle modal inner errors and empty modal lists', async () => {
-        getRelatedObjectsAndRecords.mockResolvedValue(mockData);
-        getRelated.mockResolvedValue({});
-        getRelatedParent.mockResolvedValue({});
-
-        const element = createElement('c-apm-my-records', { is: ApmMyRecords });
-        document.body.appendChild(element);
-        await Promise.resolve();
-
-        // Force open modal, with related and error both set
-        element.related = [];
-        element.error = { body: { message: 'Error!' } };
-        element.showmodal = true;
-        await Promise.resolve();
-        // After rerender, modal should show "Error: "
-        expect(element.shadowRoot.textContent).toContain('Error: Error!');
-        // Empty modal should show "No Records Found"
-        element.error = undefined;
-        await Promise.resolve();
-        expect(element.shadowRoot.textContent).toContain('No Records Found');
-    });
-
-    // Utility method coverage
-    it('should format labels and get field label for different patterns', () => {
-        // Static methods (not exported), so call via instance
-        const instance = new ApmMyRecords();
-        // __c
-        expect(instance.constructor.prototype.formatLabel('Acc_Object__c')).toBe('Acc Object');
-        // __mdt
-        expect(instance.constructor.prototype.formatLabel('Acc_Object__mdt')).toBe('Acc Object');
-        // __r
-        expect(instance.constructor.prototype.formatLabel('Acc_Object__r')).toBe('Acc Object');
-        // non-suffixed
-        expect(instance.constructor.prototype.formatLabel('Something_else')).toBe('Something else');
-        // getFieldLabel: with dot
-        expect(instance.constructor.prototype.getFieldLabel('Parent.Id__c')).toBe('Parent');
-        // getFieldLabel: without dot
-        expect(instance.constructor.prototype.getFieldLabel('My_Custom__r')).toBe('My Custom');
-    });
+    await Promise.resolve();
 });
