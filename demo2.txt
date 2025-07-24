@@ -1,19 +1,16 @@
 import { createElement } from 'lwc';
-import ApmMyRecords from 'c/apmMyRecords'; // Adjusted to match JS class name. Change to 'c/aPM_MyRecords' if that is your exact component name.
+import ApmMyRecords from 'c/apmMyRecords';
 import getRelatedObjectsAndRecords from '@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords';
 import getRelated from '@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords';
 import getRelatedParent from '@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords';
 
-// Mock JSON data - USES YOUR EXISTING FILES
+// Mock JSON data
 const mockRelatedObjectsAndRecords = require('./data/relatedObjectsAndRecords.json');
 const mockRelated = require('./data/relatedRecords.json');
 const mockParent = require('./data/parentRecords.json');
-
-// NEW MOCK DATA FILE FOR PAGINATION - REQUIRES THE FILE FROM STEP 1
 const mockPaginationData = require('./data/relatedObjectsAndRecordsWithPagination.json');
 
-
-// Mock Apex - UNCHANGED
+// Mock Apex
 jest.mock('@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords', () => ({
     default: jest.fn()
 }), { virtual: true });
@@ -35,9 +32,9 @@ describe('c-a-p-m-my-records', () => {
         jest.clearAllMocks();
     });
 
+    // THIS IS THE CORRECTED FUNCTION - REVERTED TO YOUR ORIGINAL VERSION
     async function flushPromises() {
-        // This is a microtask-based flush, which is standard for LWC Jest tests.
-        return new Promise(resolve => setImmediate(resolve));
+        return Promise.resolve();
     }
 
     // =================================================================
@@ -53,11 +50,9 @@ describe('c-a-p-m-my-records', () => {
 
         await flushPromises();
 
-        // Should render two tables (Account and Contact)
         const tables = element.shadowRoot.querySelectorAll('table.slds-table');
         expect(tables.length).toBe(2);
 
-        // Should render record links
         const recordLinks = element.shadowRoot.querySelectorAll('a.slds-text-link');
         expect(recordLinks.length).toBe(3);
     });
@@ -109,19 +104,14 @@ describe('c-a-p-m-my-records', () => {
 
         await flushPromises();
 
-        // Simulate click on lightning-icon for first Account record
         const icon = element.shadowRoot.querySelector('lightning-icon[data-index="0"][data-objectindex="0"]');
         expect(icon).not.toBeNull();
         icon.click();
 
-        // Wait for both Apex calls in Promise.all to resolve
         await flushPromises();
         await flushPromises();
 
-        // Modal should now be open
         expect(element.shadowRoot.querySelector('.slds-modal.slds-fade-in-open')).not.toBeNull();
-
-        // Should display related/parent records in accordion
         const accordionSections = element.shadowRoot.querySelectorAll('lightning-accordion-section');
         expect(accordionSections.length).toBeGreaterThan(0);
     });
@@ -176,7 +166,6 @@ describe('c-a-p-m-my-records', () => {
         expect(element.shadowRoot.querySelector('.slds-modal.slds-fade-in-open')).toBeNull();
     });
 
-
     // =================================================================
     // NEW PAGINATION TESTS TO INCREASE COVERAGE
     // =================================================================
@@ -203,21 +192,18 @@ describe('c-a-p-m-my-records', () => {
         document.body.appendChild(element);
         await flushPromises();
 
-        // Click the next icon
         element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronright"]').click();
         await flushPromises();
 
-        // Now on page 2
         const prevButton = element.shadowRoot.querySelector('button[title="Previous"]');
         const nextButton = element.shadowRoot.querySelector('button[title="Next"]');
         
         expect(prevButton.disabled).toBe(false);
-        expect(nextButton.disabled).toBe(true); // This is the last page
+        expect(nextButton.disabled).toBe(true);
 
         const pageIndicator = element.shadowRoot.querySelector('.slds-button-group span');
         expect(pageIndicator.textContent.trim()).toBe('2 / 2');
 
-        // Verify records shown are for page 2 (should be 2 records)
         const recordLinks = element.shadowRoot.querySelectorAll('a.slds-text-link');
         expect(recordLinks.length).toBe(2);
         expect(recordLinks[0].textContent).toBe('Pagination Account 11');
@@ -229,15 +215,12 @@ describe('c-a-p-m-my-records', () => {
         document.body.appendChild(element);
         await flushPromises();
 
-        // Go to page 2
         element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronright"]').click();
         await flushPromises();
 
-        // Go back to page 1
         element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronleft"]').click();
         await flushPromises();
 
-        // Check if we are back on page 1
         const prevButton = element.shadowRoot.querySelector('button[title="Previous"]');
         expect(prevButton.disabled).toBe(true);
 
@@ -245,11 +228,10 @@ describe('c-a-p-m-my-records', () => {
         expect(pageIndicator.textContent.trim()).toBe('1 / 2');
 
         const recordLinks = element.shadowRoot.querySelectorAll('a.slds-text-link');
-        expect(recordLinks.length).toBe(10); // Page 1 has 10 records
+        expect(recordLinks.length).toBe(10);
     });
 
     it('PAGINATION: disables both buttons when there is only one page of data', async () => {
-        // Use the original mock data which has less than 10 records per object
         getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedObjectsAndRecords);
         const element = createElement('c-a-p-m-my-records', { is: ApmMyRecords });
         document.body.appendChild(element);
