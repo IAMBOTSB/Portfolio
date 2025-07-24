@@ -1,266 +1,242 @@
-<template>
-    <template if:true={relatedData}>
-        <div class="slds-grid slds-wrap">
-            <template for:each={relatedData} for:item="objectData" for:index="objectIndex">
-                <div key={objectData.objectName}
-                    class="slds-col slds-size_1-of-1 slds-small-size_1-of-1 slds-medium-size_1-of-2 slds-large-size_1-of-3 slds-p-around_xx-small">
-                    <div class="TableCard">
-                        <div class="TableCardHeader slds-grid slds-grid_align-spread">
-                            <h2 class="TableCardTitle">{objectData.objectLabel}</h2>
-                        </div>
-                        <div class="TableCardBody">
-                            <div style="height:100%" class="slds-scrollable_x">
-                                <template if:true={objectData.records.length}>
-                                    <table
-                                        class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_fixed-layout">
-                                        <thead>
-                                            <tr>
-                                                <th scope="col">Name</th>
-                                                <template for:each={objectData.fields} for:item="field">
-                                                    <th scope="col" key={field.apiName}>{field.label}</th>
-                                                </template>
-                                                <th scope="col">&nbsp;</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <template for:each={objectData.records} for:item="record"
-                                                for:index="recordIndex">
-                                                <tr key={record.recordUrl}>
-                                                    <td class="truncate-cell" title={record.name}>
-                                                        <a href={record.recordUrl} rel="noopener"
-                                                            class="slds-text-link">{record.name}</a>
-                                                    </td>
-                                                    <template for:each={record.fieldValues} for:item="fieldValue">
-                                                        <td key={fieldValue} class="truncate-cell" title={fieldValue}>
-                                                            {fieldValue}</td>
-                                                    </template>
-                                                    <td style="text-align: -webkit-center;">
-                                                        <lightning-icon icon-name="utility:preview" size="xx-small"
-                                                            alternative-text="See Details" title="See Details"
-                                                            data-index={recordIndex} data-objectindex={objectIndex}
-                                                            onclick={handlePrintRecord}>
-                                                        </lightning-icon>
-                                                    </td>
-                                                </tr>
-                                            </template>
-                                        </tbody>
-                                    </table>
-                                </template>
-
-                                <template if:false={objectData.records.length}>
-                                    <div class="no-records-container">
-                                        <div class="slds-illustration slds-illustration_small">
-                                            <svg>...</svg>
-                                            <div class="slds-text-longform">
-                                                <h3 class="slds-text-heading_medium">No Records Found</h3>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </template>
-            <div class="slds-col slds-size_1-of-1 slds-small-size_1-of-1 slds-medium-size_1-of-2 slds-large-size_1-of-3 slds-p-around_xx-small">
-                <c-apm-my-assessment style="height:100%"></c-apm-my-assessment>
-            </div>
-        </div>
-    </template>
-    <template if:true={error}>
-        <p class="slds-text-color_error">Error: {error.body.message}</p>
-    </template>
-
-    <template if:true={showmodal}>
-        <section role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="modal-heading-01"
-            class="slds-modal slds-fade-in-open">
-            <div class="slds-modal__container">
-                <div class="slds-modal__header">
-                    <h1 id="modal-heading-01" class="slds-modal__title slds-hyphenate" tabindex="-1">Related
-                        Records/Actions</h1>
-                </div>
-                <div class="slds-modal__content slds-p-around_medium" id="modal-content-id-1">
-                    <div class="slds-form-element">
-                        <div class="slds-form-element__control">
-
-                            <template if:true={related.length}>
-                                <lightning-accordion allow-multiple-sections-open>
-                                    <template for:each={related} for:item="objectData">
-                                        <lightning-accordion-section key={objectData.objectName}
-                                            name={objectData.objectName} label={objectData.objectLabel}>
-                                            <div class="slds-grid slds-wrap">
-                                                <template if:true={objectData.records.length}>
-                                                    <template for:each={objectData.records} for:item="record">
-                                                        <div key={record.recordUrl}
-                                                            class="slds-col slds-size_1-of-1 slds-small-size_1-of-2 slds-medium-size_1-of-2">
-                                                            <a href={record.recordUrl} target="_blank"
-                                                                class="modalrecordcard slds-box slds-box_x-small slds-m-around_x-small slds-text-link_reset"
-                                                                style="display:block; text-decoration:none;">
-                                                                <div>
-                                                                    <template for:each={record.displayFields}
-                                                                        for:item="field">
-                                                                        <div key={field.label}
-                                                                            class="slds-m-vertical_xx-small">
-                                                                            <span style="font-weight:600"
-                                                                                class="slds-text-title">{field.label} :
-                                                                            </span>
-                                                                            <span>{field.value}</span>
-                                                                        </div>
-                                                                    </template>
-                                                                </div>
-                                                            </a>
-                                                        </div>
-                                                    </template>
-                                                </template>
-                                                <template if:false={objectData.records.length}>
-                                                    <p>No Records Found</p>
-                                                </template>
-                                            </div>
-                                        </lightning-accordion-section>
-                                    </template>
-                                </lightning-accordion>
-                            </template>
-                            <template if:false={related.length}>
-                                <p>No Records Found</p>
-                            </template>
-
-                            <template if:true={error}>
-                                <p>Error: {error.body.message}</p>
-                            </template>
-                        </div>
-                    </div>
-                </div>
-                <div class="slds-modal__footer">
-                    <button
-                        style="color: color-mix(in srgb, var(--slds-g-color-accent-2) 70%,transparent);"
-                        onclick={handlemodalclose} class="slds-button slds-button_neutral"
-                        aria-label="Cancel and close">Cancel</button>
-                </div>
-            </div>
-        </section>
-        <div class="slds-backdrop slds-backdrop_open" role="presentation"></div>
-    </template>
-
-</template>
-
-
-import { LightningElement, track } from 'lwc';
+import { createElement } from 'lwc';
+import ApmMyRecords from 'c/apmMyRecords';
 import getRelatedObjectsAndRecords from '@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords';
 import getRelated from '@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords';
 import getRelatedParent from '@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords';
 
-function formatLabel(apiName) {
-    // Remove '__c', '__mdt', and '__r' suffixes, then replace underscores with spaces
-    return apiName.replace(/__c$|__mdt$|__r$/i, '').replace(/_/g, ' ');
+// Mock data for getRelatedObjectsAndRecords
+const mockInitialData = {
+    "Account": {
+        "fields": ["Id", "Name", "Industry"],
+        "records": Array.from({ length: 15 }, (_, i) => ({
+            Id: `001xx000003D${i.toString().padStart(3, '0')}`,
+            Name: `Test Account ${i + 1}`,
+            Industry: `Technology ${i + 1}`
+        }))
+    },
+    "Contact": {
+        "fields": ["Id", "Name", "Email"],
+        "records": [] // For testing no-records scenario
+    }
+};
+
+// Mock data for modal
+const mockRelatedData = {
+    "Opportunity": {
+        "fields": ["Id", "Name", "StageName"],
+        "records": [{ Id: '006xx000001AbcDE', Name: 'Related Opportunity', StageName: 'Prospecting' }]
+    }
+};
+
+const mockParentData = {
+    "Case": {
+        "fields": ["Id", "Name", "Status"],
+        "records": [{ Id: '500xx000001XyzAB', Name: 'Parent Case', Status: 'New' }]
+    }
+};
+
+// Mock for Apex error
+const mockApexError = { body: { message: 'An internal server error has occurred' } };
+
+// Mocking the Apex methods
+jest.mock('@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords',
+    () => ({ default: jest.fn() }),
+    { virtual: true }
+);
+jest.mock('@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords',
+    () => ({ default: jest.fn() }),
+    { virtual: true }
+);
+jest.mock('@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords',
+    () => ({ default: jest.fn() }),
+    { virtual: true }
+);
+
+
+// Helper function to wait for promises to resolve
+async function flushPromises() {
+    return Promise.resolve();
 }
 
-function getFieldLabel(fieldName) {
-    // Use the part before the dot if present, then format
-    const namePart = fieldName.includes('.') ? fieldName.split('.')[0] : fieldName;
-    return formatLabel(namePart);
-}
-
-
-
-export default class ApmMyRecords extends LightningElement {
-   @track relatedData = [];
-    @track related = [];
-    @track error;
-    @track showmodal = false;
-
-    connectedCallback() {
-        this.fetchRelatedData();
-    }
-
-    fetchRelatedData() {
-        getRelatedObjectsAndRecords()
-            .then((data) => {
-                this.relatedData = Object.entries(data).map(([objectName, value]) => ({
-                    objectName: objectName,
-                    objectLabel: formatLabel(objectName),
-                    fields: value.fields
-                        .filter(field => field !== 'Id' && field !== 'Name')
-                        .map(field => ({
-                            apiName: field,
-                            label: getFieldLabel(field)
-                        })),
-                    records: value.records.map(rec => ({
-                        name: rec.Name,
-                        recordUrl: '/' + rec.Id,
-                        raw: rec, // Store the full record for logging
-                        fieldValues: value.fields
-                            .filter(field => field !== 'Id' && field !== 'Name')
-                            .map(fieldName => rec[fieldName] || 'N/A')
-                    }))
-                }));
-                this.error = undefined;
-            })
-            .catch((error) => {
-                this.error = error;
-                this.relatedData = [];
-            });
-    }
-
-    handlePrintRecord(event) {
-        const recordIndex = event.target.dataset.index;
-        const objectIndex = event.target.dataset.objectindex;
-        const record = this.relatedData[objectIndex].records[recordIndex];
-
-        let id = '';
-        if (record.recordUrl) {
-            id = record.recordUrl.replace('/', '');
-        } else if (record.raw && record.raw.Id) {
-            id = record.raw.Id;
+describe('c-apm-my-records', () => {
+    afterEach(() => {
+        // The jsdom instance is shared across test cases in a single file so reset the DOM
+        while (document.body.firstChild) {
+            document.body.removeChild(document.body.firstChild);
         }
+        jest.clearAllMocks();
+    });
 
-        // Fetch both related records and parent records
-        Promise.all([
-            getRelated({ recordId: id }),
-            getRelatedParent({ childRecordId: id })
-        ])
-            .then(([relatedData, parentData]) => {
+    // ----------------- Initial Load Tests -----------------
+    it('fetches records on connectedCallback and renders them correctly', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockInitialData);
 
-                // Utility function to process data objects (relatedData or parentData)
-                function processData(data) {
-                    return Object.entries(data).map(([objectName, value]) => ({
-                        objectName: objectName,
-                        objectLabel: formatLabel(objectName),
-                        fields: value.fields
-                            .filter(field => field !== 'Id' && field !== 'Name')
-                            .map(field => ({
-                                apiName: field,
-                                label: formatLabel(field)
-                            })),
-                        records: value.records.map(rec => ({
-                            name: rec.Name,
-                            recordUrl: '/' + rec.Id,
-                            displayFields: value.fields
-                                .filter(field => field !== 'Id' && field !== 'Name')
-                                .map(fieldName => ({
-                                    label: getFieldLabel(fieldName),
-                                    value: rec[fieldName] || 'N/A'
-                                }))
-                        }))
-                    }));
-                }
+        const element = createElement('c-apm-my-records', {
+            is: ApmMyRecords
+        });
+        document.body.appendChild(element);
 
-                // Usage:
-                const processedRelatedData = processData(relatedData);
-                const processedParentData = processData(parentData);
-                // Combine related and parent records into a single list
-                this.related = [...processedRelatedData, ...processedParentData];
-                this.error = undefined;
-            })
-            .catch((error) => {
-                this.error = error;
-                this.related = [];
-            });
+        await flushPromises();
 
-        this.showmodal = true;
-    }
+        const cards = element.shadowRoot.querySelectorAll('.TableCard');
+        expect(cards.length).toBe(2);
 
-    handlemodalclose() {
-        this.related = [];
-        this.showmodal = false;
-    }
-}
+        // Check Account card header and data
+        const accountCardTitle = element.shadowRoot.querySelector('h2.TableCardTitle');
+        expect(accountCardTitle.textContent).toBe('Account'); // Tests formatLabel
+
+        const accountRows = element.shadowRoot.querySelectorAll('table')[0].querySelectorAll('tbody tr');
+        expect(accountRows.length).toBe(10); // PAGE_SIZE is 10
+
+        // Check Contact card for "No Records Found"
+        const noRecordsDiv = element.shadowRoot.querySelectorAll('.no-records-container');
+        expect(noRecordsDiv.length).toBe(1);
+        expect(noRecordsDiv[0].textContent).toContain('No Records Found');
+    });
+
+    it('displays an error message when initial data fetch fails', async () => {
+        getRelatedObjectsAndRecords.mockRejectedValue(mockApexError);
+
+        const element = createElement('c-apm-my-records', {
+            is: ApmMyRecords
+        });
+        document.body.appendChild(element);
+
+        await flushPromises();
+
+        const errorParagraph = element.shadowRoot.querySelector('p.slds-text-color_error');
+        expect(errorParagraph).not.toBeNull();
+        expect(errorParagraph.textContent).toBe(`Error: ${mockApexError.body.message}`);
+    });
+
+    // ----------------- Pagination Tests -----------------
+    it('handles next and previous page clicks correctly', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockInitialData);
+
+        const element = createElement('c-apm-my-records', {
+            is: ApmMyRecords
+        });
+        document.body.appendChild(element);
+        await flushPromises();
+
+        // Initial state (Page 1)
+        let pageInfo = element.shadowRoot.querySelector('.slds-card__footer span[style*="margin"]');
+        expect(pageInfo.textContent.trim()).toBe('1 / 2');
+
+        let resultStats = element.shadowRoot.querySelector('.slds-text-body_small');
+        expect(resultStats.textContent).toContain('Showing 1 to 10 of 15 results');
+
+        // Click Next
+        const nextButton = element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronright"]');
+        nextButton.dispatchEvent(new CustomEvent('click'));
+        await flushPromises();
+
+        // State after next click (Page 2)
+        pageInfo = element.shadowRoot.querySelector('.slds-card__footer span[style*="margin"]');
+        expect(pageInfo.textContent.trim()).toBe('2 / 2');
+
+        resultStats = element.shadowRoot.querySelector('.slds-text-body_small');
+        expect(resultStats.textContent).toContain('Showing 11 to 15 of 15 results');
+
+        let nextButtonDisabled = element.shadowRoot.querySelector('button[title="Next"]').disabled;
+        expect(nextButtonDisabled).toBe(true);
+
+        // Click Previous
+        const prevButton = element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronleft"]');
+        prevButton.dispatchEvent(new CustomEvent('click'));
+        await flushPromises();
+
+        // State after previous click (Page 1)
+        pageInfo = element.shadowRoot.querySelector('.slds-card__footer span[style*="margin"]');
+        expect(pageInfo.textContent.trim()).toBe('1 / 2');
+
+        let prevButtonDisabled = element.shadowRoot.querySelector('button[title="Previous"]').disabled;
+        expect(prevButtonDisabled).toBe(true);
+    });
+
+    // ----------------- Modal Interaction Tests -----------------
+    it('opens modal with related and parent data on icon click', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockInitialData);
+        getRelated.mockResolvedValue(mockRelatedData);
+        getRelatedParent.mockResolvedValue(mockParentData);
+
+        const element = createElement('c-apm-my-records', { is: ApmMyRecords });
+        document.body.appendChild(element);
+        await flushPromises();
+
+        // Click the preview icon on the first record
+        const previewIcon = element.shadowRoot.querySelector('lightning-icon[icon-name="utility:preview"]');
+        previewIcon.dispatchEvent(new CustomEvent('click', {
+            detail: {},
+            bubbles: true, // Ensure event bubbles up
+            composed: true // For shadow DOM
+        }));
+        await flushPromises();
+
+        // Verify modal is open
+        const modal = element.shadowRoot.querySelector('section.slds-modal');
+        expect(modal).not.toBeNull();
+        expect(element.shadowRoot.querySelector('.slds-backdrop')).not.toBeNull();
+        
+        // Verify Apex calls for modal data
+        expect(getRelated).toHaveBeenCalledWith({ recordId: '001xx000003D000' });
+        expect(getRelatedParent).toHaveBeenCalledWith({ childRecordId: '001xx000003D000' });
+        
+        // Verify modal content
+        const accordionSections = element.shadowRoot.querySelectorAll('lightning-accordion-section');
+        expect(accordionSections.length).toBe(2);
+        expect(accordionSections[0].label).toBe('Opportunity');
+        expect(accordionSections[1].label).toBe('Case');
+    });
+
+    it('handles error when fetching data for the modal', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockInitialData);
+        // Mock a rejection from one of the modal data calls
+        getRelated.mockRejectedValue(mockApexError);
+        getRelatedParent.mockResolvedValue(mockParentData);
+
+        const element = createElement('c-apm-my-records', { is: ApmMyRecords });
+        document.body.appendChild(element);
+        await flushPromises();
+
+        // Click preview icon
+        const previewIcon = element.shadowRoot.querySelector('lightning-icon[icon-name="utility:preview"]');
+        previewIcon.dispatchEvent(new CustomEvent('click'));
+        await flushPromises();
+
+        // Check that modal is still open but shows an error
+        const modal = element.shadowRoot.querySelector('section.slds-modal');
+        expect(modal).not.toBeNull();
+        
+        // Check for error message within the modal content
+        const errorParagraph = element.shadowRoot.querySelector('#modal-content-id-1 p');
+        // Note: The original component has two error blocks. This test will find the one inside the modal.
+        expect(errorParagraph.textContent).toBe(`Error: ${mockApexError.body.message}`);
+    });
+
+    it('closes the modal when the cancel button is clicked', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockInitialData);
+        getRelated.mockResolvedValue(mockRelatedData);
+        getRelatedParent.mockResolvedValue(mockParentData);
+
+        const element = createElement('c-apm-my-records', { is: ApmMyRecords });
+        document.body.appendChild(element);
+        await flushPromises();
+
+        // Open the modal first
+        element.shadowRoot.querySelector('lightning-icon[icon-name="utility:preview"]').dispatchEvent(new CustomEvent('click'));
+        await flushPromises();
+
+        // Ensure modal is open before clicking close
+        expect(element.shadowRoot.querySelector('section.slds-modal')).not.toBeNull();
+
+        // Click the close button
+        const closeButton = element.shadowRoot.querySelector('button.slds-button_neutral');
+        closeButton.dispatchEvent(new CustomEvent('click'));
+        await flushPromises();
+
+        // Verify modal is closed
+        expect(element.shadowRoot.querySelector('section.slds-modal')).toBeNull();
+        expect(element.shadowRoot.querySelector('.slds-backdrop')).toBeNull();
+    });
+});
