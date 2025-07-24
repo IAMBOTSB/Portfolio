@@ -1,67 +1,266 @@
-it('should handleNextPage and increment page number correctly', async () => {
-    getRelatedObjectsAndRecords.mockResolvedValueOnce({
-        Account__c: {
-            fields: ['Name', 'Custom_Field__c'],
-            records: Array.from({ length: 21 }).map((_, i) => ({
-                Id: `001${i}`,
-                Name: `Test ${i + 1}`,
-                Custom_Field__c: `Field ${i + 1}`
-            }))
+import { createElement } from 'lwc';
+import ApmMyRecords from 'c/apmMyRecords';
+import getRelatedObjectsAndRecords from '@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords';
+import getRelated from '@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords';
+import getRelatedParent from '@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords';
+
+// Mock Apex
+jest.mock(
+    '@salesforce/apex/APM_apLWC_MyRecordsController.getRelatedObjectsAndRecords',
+    () => ({
+        default: jest.fn()
+    }),
+    { virtual: true }
+);
+
+jest.mock(
+    '@salesforce/apex/APM_apLWC_MyRecordsController.getAllRelatedRecords',
+    () => ({
+        default: jest.fn()
+    }),
+    { virtual: true }
+);
+
+jest.mock(
+    '@salesforce/apex/APM_apLWC_MyRecordsController.getParentRecords',
+    () => ({
+        default: jest.fn()
+    }),
+    { virtual: true }
+);
+
+// Sample mock data (you already defined this, not modified)
+const mockRelatedData = {
+    Account: {
+        fields: ['Id', 'Name', 'Phone', 'Industry'],
+        records: Array.from({ length: 25 }).map((_, index) => ({
+            Id: `001xx000003DG${index}`,
+            Name: `Account ${index + 1}`,
+            Phone: '1234567890',
+            Industry: 'Technology'
+        }))
+    }
+};
+
+describe('c-apm-my-records pagination tests', () => {
+    afterEach(() => {
+        while (document.body.firstChild) {
+            document.body.removeChild(document.body.firstChild);
         }
+        jest.clearAllMocks();
     });
 
-    const element = createElement('c-apm-my-records', {
-        is: ApmMyRecords
+    it('should render correct pageRecords and handleNextPage correctly', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedData);
+
+        const element = createElement('c-apm-my-records', {
+            is: ApmMyRecords
+        });
+
+        document.body.appendChild(element);
+
+        await Promise.resolve(); // connectedCallback
+        await Promise.resolve(); // fetchRelatedData
+
+        let instance = element;
+
+        // Validate initial page = 1
+        expect(instance.pages.Account).toBe(1);
+
+        // Call handleNextPage
+        const nextEvent = {
+            target: {
+                dataset: {
+                    objectname: 'Account'
+                }
+            }
+        };
+        instance.handleNextPage(nextEvent);
+        expect(instance.pages.Account).toBe(2); // Page should be updated to 2
+
+        instance.handleNextPage(nextEvent);
+        expect(instance.pages.Account).toBe(3); // Page should be updated to 3
+
+        // Should stop at totalPages = 3 (25 records / 10 per page => 3 pages)
+        instance.handleNextPage(nextEvent);
+        expect(instance.pages.Account).toBe(3); // Still page 3, no overflow
     });
-    document.body.appendChild(element);
-    await Promise.resolve(); // wait for render
-    element.connectedCallback();
-    await Promise.resolve(); // wait for Apex result
 
-    const nextButtonIcon = element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronright"]');
-    nextButtonIcon.dispatchEvent(new CustomEvent('click', {
-        bubbles: true,
-        composed: true
-    }));
+    it('should handlePrevPage correctly and stop at first page', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedData);
 
-    // simulate second click to increase page from 2 to 3 (only if more than 20 items)
-    nextButtonIcon.dispatchEvent(new CustomEvent('click', {
-        bubbles: true,
-        composed: true
-    }));
+        const element = createElement('c-apm-my-records', {
+            is: ApmMyRecords
+        });
 
-    await Promise.resolve();
+        document.body.appendChild(element);
+
+        await Promise.resolve(); // connectedCallback
+        await Promise.resolve(); // fetchRelatedData
+
+        let instance = element;
+
+        // Set current page to 3 manually
+        instance.pages.Account = 3;
+
+        const prevEvent = {
+            target: {
+                dataset: {
+                    objectname: 'Account'
+                }
+            }
+        };
+
+        instance.handlePrevPage(prevEvent);
+        expect(instance.pages.Account).toBe(2);
+
+        instance.handlePrevPage(prevEvent);
+        expect(instance.pages.Account).toBe(1);
+
+        instance.handlePrevPage(prevEvent);
+        expect(instance.pages.Account).toBe(1); // Should not go below 1
+    });
+
+    it('should calculate correct resultStats in pagedObjects', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedData);
+
+        const element = createElement('c-apm-my-records', {
+            is: ApmMyRecords
+        });
+
+        document.body.appendChild(element);
+
+        await Promise.resolve();
+        await Promise.resolve();
+
+        const pagedObjects = element.pagedObjects;
+        const accountPage = pagedObjects.find(o => o.objectName === 'Account');
+
+        expect(accountPage.resultStats.start).toBe(1);
+        expect(accountPage.resultStats.end).toBe(10);
+        expect(accountPage.resultStats.total).toBe(25);
+        expect(accountPage.totalPages).toBe(3);
+    });
+
+    it('should disable prev and next buttons correctly', async () => {
+        getRelatedObjectsAndRecords.mockResolvedValue(mockRelatedData);
+
+        const element = createElement('c-apm-my-records', {
+            is: ApmMyRecords
+        });
+
+        document.body.appendChild(element);
+
+        await Promise.resolve();
+        await Promise.resolve();
+
+        element.pages.Account = 1;
+        let obj = element.pagedObjects.find(o => o.objectName === 'Account');
+        expect(obj.isPrevDisabled).toBe(true);
+        expect(obj.isNextDisabled).toBe(false);
+
+        element.pages.Account = 3;
+        obj = element.pagedObjects.find(o => o.objectName === 'Account');
+        expect(obj.isPrevDisabled).toBe(false);
+        expect(obj.isNextDisabled).toBe(true);
+    });
 });
 
-it('should handlePrevPage and decrement page number correctly', async () => {
-    getRelatedObjectsAndRecords.mockResolvedValueOnce({
-        Account__c: {
-            fields: ['Name', 'Custom_Field__c'],
-            records: Array.from({ length: 20 }).map((_, i) => ({
-                Id: `001${i}`,
-                Name: `Test ${i + 1}`,
-                Custom_Field__c: `Value ${i + 1}`
-            }))
+
+
+
+
+
+
+
+----------------------------------------
+----------------------------------------
+    describe('pagination buttons and page state', () => {
+        async function setupWithMultiRecords() {
+            // Using your mock, but we ensure one object has > 10 records
+            const data = JSON.parse(JSON.stringify(mockRelatedObjectsAndRecords));
+            // Push extra records to first object's array for pagination
+            const objectNames = Object.keys(data);
+            if (objectNames.length === 0) throw new Error('No data in mock');
+            // e.g., for Account
+            const objName = objectNames[0];
+            while (data[objName].records.length <= 12) {
+                // Slight fudge in case your mock only has a few
+                data[objName].records.push({
+                    Id: `00X${data[objName].records.length}`,
+                    Name: `Extra${data[objName].records.length}`,
+                    ...(data[objName].fields
+                        .filter(f => !['Id', 'Name'].includes(f))
+                        .reduce((a, f) => { a[f] = `Val${data[objName].records.length}`; return a; }, {}))
+                });
+            }
+            getRelatedObjectsAndRecords.mockResolvedValue(data);
+
+            const element = createElement('c-a-p-m-my-records', { is: ApmMyRecords });
+            document.body.appendChild(element);
+            await Promise.resolve();
+            return { element, objName, data };
         }
+
+        it('prev is disabled on page 1, next enabled; page state updates as you page', async () => {
+            const { element, objName } = await setupWithMultiRecords();
+
+            let pagedObj = element.pagedObjects.find(o => o.objectName === objName);
+            expect(pagedObj.currentPage).toBe(1);
+            expect(pagedObj.isPrevDisabled).toBe(true);
+            expect(pagedObj.isNextDisabled).toBe(false);
+
+            // Next page
+            element.handleNextPage({ target: { dataset: { objectname: objName } } });
+            await Promise.resolve();
+            pagedObj = element.pagedObjects.find(o => o.objectName === objName);
+            expect(pagedObj.currentPage).toBe(2);
+            expect(pagedObj.isPrevDisabled).toBe(false);
+
+            // Page back to one
+            element.handlePrevPage({ target: { dataset: { objectname: objName } } });
+            await Promise.resolve();
+            pagedObj = element.pagedObjects.find(o => o.objectName === objName);
+            expect(pagedObj.currentPage).toBe(1);
+            expect(pagedObj.isPrevDisabled).toBe(true);
+        });
+
+        it('next is disabled on last page and does not increment, prev on first page does not decrement', async () => {
+            const { element, objName } = await setupWithMultiRecords();
+            let pagedObj = element.pagedObjects.find(o => o.objectName === objName);
+            const totalPages = pagedObj.totalPages;
+
+            // Go to last page
+            element.pages[objName] = totalPages;
+            await Promise.resolve();
+            pagedObj = element.pagedObjects.find(o => o.objectName === objName);
+            expect(pagedObj.currentPage).toBe(totalPages);
+            expect(pagedObj.isNextDisabled).toBe(true);
+
+            // Try to go next (should NOT increment)
+            element.handleNextPage({ target: { dataset: { objectname: objName } } });
+            expect(element.pages[objName]).toBe(totalPages);
+
+            // Back to first, try to go prev (should NOT decrement)
+            element.pages[objName] = 1;
+            element.handlePrevPage({ target: { dataset: { objectname: objName } } });
+            expect(element.pages[objName]).toBe(1);
+        });
+
+        it('pageRecords slices correct records for each page', async () => {
+            const { element, objName, data } = await setupWithMultiRecords();
+
+            // Start at 1, should have 10
+            let pagedObj = element.pagedObjects.find(o => o.objectName === objName);
+            expect(pagedObj.currentPage).toBe(1);
+            expect(pagedObj.pageRecords.length).toBe(10);
+
+            // 2nd page, should have 3 (if 13 total)
+            element.pages[objName] = 2;
+            await Promise.resolve();
+            pagedObj = element.pagedObjects.find(o => o.objectName === objName);
+            expect(pagedObj.pageRecords.length).toBe(data[objName].records.length - 10);
+            // First record on page 2 is record 11 in full list (0-based)
+            expect(pagedObj.pageRecords[0].name).toBe(data[objName].records[10].Name);
+        });
     });
-
-    const element = createElement('c-apm-my-records', {
-        is: ApmMyRecords
-    });
-    document.body.appendChild(element);
-
-    element.connectedCallback();
-    await Promise.resolve();
-
-    // Set current page to 2 to test going back to 1
-    element.pages = { Account__c: 2 };
-    await Promise.resolve();
-
-    const prevButtonIcon = element.shadowRoot.querySelector('lightning-icon[icon-name="utility:chevronleft"]');
-    prevButtonIcon.dispatchEvent(new CustomEvent('click', {
-        bubbles: true,
-        composed: true
-    }));
-
-    await Promise.resolve();
-});
